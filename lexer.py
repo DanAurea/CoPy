@@ -7,20 +7,24 @@ class Lexer(object):
     """
 
     def __init__(self):
-        self.grammar_rules = self._compile_grammar()
+        self.token_re = self._compile_token_re()
 
-    def _compile_grammar(self):
+    def _compile_token_re(self):
         """
         Initialize grammar rules and compiles it with re
         module, this will save processing time.
         """
-        grammar_rules = {}
-        for rule in grammar.Grammar:
-            grammar_rules[rule.name] = re.compile(rule.value) 
+        token_list_re = {}
+        for rule in grammar.CToken:
+            token_list_re[rule.name] = re.compile(rule.value) 
 
-        return grammar_rules
+        print(token_list_re)
+        return token_list_re
 
-    def tokenize(self):
+    def scan(self):
+        pass
+
+    def parse(self, file):
         pass
 
 if __name__ == "__main__":

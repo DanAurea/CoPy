@@ -1,17 +1,25 @@
 import enum
 
-class Grammar(enum.Enum):
+class SimplestRe(enum.Enum):
+    """
+    Enumeration of all simplest regexp that could be used
+    for lexem pattern.
+    """
+
+    LETTER = "[a-zA-Z]"
+    DIGIT = "[0-9]"
+    LETTER_DIGIT = "[a-zA-Z-0-9]"
+    E = f"""[Ee][+-]?{DIGIT}+"""
+    FLOAT_SUFFIX = "(f|F|l|L)"
+    INT_SUFFIX = "(u|U|l|L)*"
+
+class CToken(enum.Enum):
     """
     Enumeration of grammar rules respectively to ANSI C.
 
     Ref. https://www.lysator.liu.se/c/ANSI-C-grammar-y.html
     """
-    LETTER = "[a-zA-Z]"
-    DIGIT = "[0-9]"
-    LETTER_DIGIT = f"""{LETTER}|{DIGIT}"""
-    E = f"""[Ee][+-]?{DIGIT}+"""
-    FLOAT_SUFFIX = "(f|F|l|L)"
-    INT_SUFFIX = "(u|U|l|L)*"
+    COMMENT = "\/\*[\s\S]*?\*\/+|\/\/.*$"
 
     # Keywords
     AUTO = "auto"
@@ -48,7 +56,7 @@ class Grammar(enum.Enum):
     WHILE = "while"
 
     # Identifiers
-    TYPE = f"""{LETTER}({LETTER}|{DIGIT}*)"""
+    TYPE = f"""{SimplestRe.LETTER}({SimplestRe.LETTER}|{SimplestRe.DIGIT}*)"""
     STRING_LITTERAL = "L?\"(\\.|[^\\\"])*\""    
 
     # Operators
@@ -103,16 +111,19 @@ class Grammar(enum.Enum):
 
 # Small hack to add properly constant rules as one single rule into grammar.
 
-_CONSTANT_RULE_LIST = "|".join([
-                                    f"""0[xX]{Grammar.LETTER_DIGIT.value}+{Grammar.INT_SUFFIX.value}?""",
-                                    f"""0{Grammar.DIGIT.value}+{Grammar.INT_SUFFIX.value}?""",
-                                    f"""{Grammar.DIGIT.value}+{Grammar.INT_SUFFIX.value}?""",
+_CONSTANT_RE_LIST = "|".join([
+                                    f"""0[xX]{SimplestRe.LETTER_DIGIT.value}+{SimplestRe.INT_SUFFIX.value}?""",
+                                    f"""0{SimplestRe.DIGIT.value}+{SimplestRe.INT_SUFFIX.value}?""",
+                                    f"""{SimplestRe.DIGIT.value}+{SimplestRe.INT_SUFFIX.value}?""",
                                     f"""L?'(\\.|[^\\'])+'""",
-                                    f"""{Grammar.DIGIT.value}+{Grammar.E.value}{Grammar.FLOAT_SUFFIX.value}?""",
-                                    f"""{Grammar.DIGIT.value}*"."{Grammar.DIGIT.value}+({Grammar.E.value})?{Grammar.FLOAT_SUFFIX.value}?""",
-                                    f"""{Grammar.DIGIT.value}+"."{Grammar.DIGIT.value}*({Grammar.E.value})?{Grammar.FLOAT_SUFFIX.value}?""",
+                                    f"""{SimplestRe.DIGIT.value}+{SimplestRe.E.value}{SimplestRe.FLOAT_SUFFIX.value}?""",
+                                    f"""{SimplestRe.DIGIT.value}*\.{SimplestRe.DIGIT.value}+({SimplestRe.E.value})?{SimplestRe.FLOAT_SUFFIX.value}?""",
+                                    f"""{SimplestRe.DIGIT.value}+\.{SimplestRe.DIGIT.value}*({SimplestRe.E.value})?{SimplestRe.FLOAT_SUFFIX.value}?""",
                                 ])
 
-__GRAMMAR_RULES__ = dict([(rule.name, rule.value) for rule in Grammar] + [("CONSTANT", _CONSTANT_RULE_LIST)])
+__TOKEN_DICT__ = dict([(t.name, t.value) for t in CToken] + [("CONSTANT", _CONSTANT_RE_LIST)])
 
-Grammar = enum.Enum("Grammar", __GRAMMAR_RULES__)
+Token = enum.Enum("Token", __TOKEN_DICT__)
+
+class Grammar(object):
+    pass
