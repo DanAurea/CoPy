@@ -1,6 +1,4 @@
 import ply.lex as lex
-import re
-import grammar
 
 LETTER = r"[a-zA-Z]"
 DIGIT = r"[0-9]"
@@ -169,11 +167,11 @@ class CLexer(object):
     def __init__(self, **kwargs):
         self.lexer = lex.lex(module = self, **kwargs)
 
-    PREPROC_DIRECTIVE = "|".join(['\#' + directive for directive in [
-                                                        "include",
-                                                        "define",
-                                                        "pragma",
-                                                    ]
+    PREPROC_DIRECTIVE = r"|".join([r'\#' + directive for directive in [
+                                                                            'include',
+                                                                            'define',
+                                                                            'pragma',
+                                                                        ]
                                     ])
 
     @lex.TOKEN(PREPROC_DIRECTIVE)
@@ -242,3 +240,4 @@ if __name__ == "__main__":
         data = file.read()
 
     token_list = lexer.parse(data)
+    print(token_list)
