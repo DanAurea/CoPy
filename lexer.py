@@ -61,16 +61,6 @@ class CLexer(object):
                 "STRING_LITERAL",
 
                 # Operators
-                "PLUS",
-                "MINUS",
-                "TIMES",
-                "DIVIDE",
-                "LPAREN",
-                "RPAREN",
-                "LBRACE",
-                "RBRACE",
-                "LBRACKET",
-                "RBRACKET",
                 "ELLIPSIS",
                 "LEFT_ASSIGN",
                 "RIGHT_ASSIGN",
@@ -93,36 +83,15 @@ class CLexer(object):
                 "GE_OP",
                 "EQ_OP",
                 "NE_OP",
-                "SEMI_COLON",
-                "COMMA",
-                "COLON",
-                "ASSIGN",
-                "DOT",
-                "AND",
-                "NEG",
-                "NOT",
-                "ADD",
-                "SUB",
-                "MUL",
-                "DIV",
-                "MOD",
-                "GREATER_THAN",
-                "LESS_THAN",
-                "XOR",
-                "OR",
-                "TERNARY_OP",
             ] + list(reserved.values())
+
+    literals = [ ';', '{', '}', ',', ':', '=', '(', ')', '[', ']', '.', '&', 
+                 '!', '~', '-', '+', '*', '/', '%', '<', '>', '^', '|', '?']
 
     # Skip whitespaces
     t_ignore = ' \t\n'
     
     # Operators
-    t_LPAREN = r'\('
-    t_RPAREN = r'\)'
-    t_LBRACE = r'{'
-    t_RBRACE = r'}'
-    t_LBRACKET = r'\['
-    t_RBRACKET = r'\]'
     t_ELLIPSIS = r'\.\.\.'
     t_LEFT_ASSIGN = r'<<='
     t_RIGHT_ASSIGN = r'>>='
@@ -145,24 +114,6 @@ class CLexer(object):
     t_GE_OP = r'>='
     t_EQ_OP = r'=='
     t_NE_OP = r'!='
-    t_SEMI_COLON = r';'
-    t_COMMA = r','
-    t_COLON = r':'
-    t_ASSIGN = r'='
-    t_DOT = r'\.'
-    t_AND = r'&'
-    t_NEG = r'\!'
-    t_NOT = r'~'
-    t_SUB = r'\-'
-    t_ADD = r'\+'
-    t_MUL = r'\*'
-    t_DIV = r'\/'
-    t_MOD = r'%'
-    t_LESS_THAN = r'<'
-    t_GREATER_THAN = r'>'
-    t_XOR = r'\^'
-    t_OR = r'\|'
-    t_TERNARY_OP = r'\?'
 
     def __init__(self, **kwargs):
         self.lexer = lex.lex(module = self, **kwargs)
@@ -215,7 +166,7 @@ class CLexer(object):
         print("Illegal character '%s'" % t.value[0])
         t.lexer.skip(1)
 
-    def parse(self, data):
+    def tokenize(self, data):
         """
         Parse data and returns a token list.
         """
@@ -239,5 +190,5 @@ if __name__ == "__main__":
     with open("examples/example.c", "rt") as file:
         data = file.read()
 
-    token_list = lexer.parse(data)
+    token_list = lexer.tokenize(data)
     print(token_list)
