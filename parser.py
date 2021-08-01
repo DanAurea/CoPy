@@ -193,8 +193,9 @@ class CParser(object):
                           | SIGNED
                           | UNSIGNED
                           | struct_or_union_specifier
-                          | enum_specifier'''
-        pass
+                          | enum_specifier
+                          | TYPE_NAME '''
+        p[0] = p[1]
 
     def p_struct_or_union_specifier(self, p):
         '''struct_or_union_specifier : struct_or_union IDENTIFIER '{' struct_declaration_list '}' 
@@ -215,14 +216,17 @@ class CParser(object):
 
     def p_struct_declaration(self, p):
         '''struct_declaration : specifier_qualifier_list struct_declarator_list ';' '''
-        pass
+        print(p[:])
 
     def p_specifier_qualifier_list(self, p):
         '''specifier_qualifier_list : type_specifier specifier_qualifier_list
                                     | type_specifier
                                     | type_qualifier specifier_qualifier_list
                                     | type_qualifier '''
-        pass
+        if len(p) == 3:
+            p[0] = [p[1], p[2]]
+        else:
+            p[0] = p[1]
 
     def p_struct_declarator_list(self, p):
         '''struct_declarator_list : struct_declarator
@@ -254,7 +258,7 @@ class CParser(object):
     def p_type_qualifier(self, p):
         '''type_qualifier : CONST
                           | VOLATILE '''
-        pass
+        p[0] = p[1]
 
     def p_declarator(self, p):
         '''declarator : pointer direct_declarator
@@ -429,7 +433,7 @@ if __name__ == "__main__":
 
     data = '''
         typedef struct {
-            float test;
+            const float test;
             double test2;
         }test;
     '''
