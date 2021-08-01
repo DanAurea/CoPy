@@ -51,7 +51,8 @@ class CLexer(object):
     # This class attribute should be set because ply
     # is using Python introspection for its internal
     # working.
-    tokens = [
+    tokens = list(reserved.values()) + \
+            [
                 "COMMENT",
 
                 "PREPROC_DIRECTIVE",
@@ -83,7 +84,7 @@ class CLexer(object):
                 "GE_OP",
                 "EQ_OP",
                 "NE_OP",
-            ] + list(reserved.values())
+            ]
 
     literals = [ ';', '{', '}', ',', ':', '=', '(', ')', '[', ']', '.', '&', 
                  '!', '~', '-', '+', '*', '/', '%', '<', '>', '^', '|', '?']
@@ -116,7 +117,7 @@ class CLexer(object):
     t_NE_OP = r'!='
 
     def __init__(self, **kwargs):
-        self.lexer = lex.lex(module = self, **kwargs)
+        self._lexer = lex.lex(module = self, **kwargs)
 
     PREPROC_DIRECTIVE = r"|".join([r'\#' + directive for directive in [
                                                                             'include',
@@ -172,10 +173,10 @@ class CLexer(object):
         """
         token_list = []
 
-        self.lexer.input(data)
+        self._lexer.input(data)
 
         while True:
-            tok = self.lexer.token()
+            tok = self._lexer.token()
             
             if not tok:
                 break
@@ -187,7 +188,7 @@ class CLexer(object):
 if __name__ == "__main__":
     lexer = CLexer()
 
-    with open("examples/example.c", "rt") as file:
+    with open("examples/example.h", "rt") as file:
         data = file.read()
 
     token_list = lexer.tokenize(data)
