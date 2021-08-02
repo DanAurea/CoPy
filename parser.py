@@ -1,4 +1,6 @@
 from lexer import CLexer
+
+import intermediate_representation as ir
 import ply.yacc as yacc
 
 class CParser(object):
@@ -7,26 +9,37 @@ class CParser(object):
     and will provide a compatible interface to Python ctypes library.
     """
 
-    def __init__(self, lexer = None, **kwargs):
+    def __init__(self, lexer = None, debug = False, **kwargs):
         if not lexer:
             lexer = CLexer()
         else:
             lexer = lexer
 
-        self.tokens = lexer.tokens
-        self._parser = yacc.yacc(module = self, **kwargs)
+        self.ast     = {}
+        self.tokens  = lexer.tokens
+        self._parser = yacc.yacc(module = self, debug = debug, **kwargs)
+        self._debug  = debug
+
+    def _print_ast(self):
+        # Print AST generated during parsing step
+        pass
 
     def p_translation_unit(self, p):
         '''translation_unit : external_declaration 
                             | translation_unit external_declaration'''
-        pass
+        if self._debug:
+            print("End of parsing !")
+            self._print_ast()
     
     def p_primary_expression(self, p):
         '''primary_expression : IDENTIFIER
                               | CONSTANT
                               | STRING_LITERAL
                               | '(' expression ')' '''
-        pass
+        if len(p) == 3:
+            p[0] = p[2]
+        else:
+            p[0] = p[1]
 
     def p_postfix_expression(self, p):
         '''postfix_expression : primary_expression
@@ -37,12 +50,19 @@ class CParser(object):
                               | postfix_expression PTR_OP IDENTIFIER 
                               | postfix_expression INC_OP 
                               | postfix_expression DEC_OP '''
-        pass
+        if len(p) == 2:
+            p[0] = p[1]
+        else:
+            p[0] = p[1:]
 
     def p_argument_expression_list(self, p):
         '''argument_expression_list : assignment_expression
                                     | argument_expression_list ',' assignment_expression '''
-        pass
+        if len(p) == 2:
+            p[0] = p[1]
+        else:
+            p[1].extend(p[3])
+            p[0] = p[1]
 
     def p_unary_expression(self, p):
         '''unary_expression : postfix_expression
@@ -51,7 +71,11 @@ class CParser(object):
                             | unary_operator cast_expression 
                             | SIZEOF unary_expression 
                             | SIZEOF '(' type_name ')' '''
-        pass
+        if len(p) == 2:
+            p[0] = p[1]
+        else:
+            # TODO : Handle other expression, currently I'm only interested with postfix
+            pass
 
     def p_unary_operator(self, p):
         '''unary_operator : '&'
@@ -60,31 +84,55 @@ class CParser(object):
                           | '-'  
                           | '~'  
                           | '!' '''
-        pass
+        p[0] = p[1]
 
     def p_cast_expression(self, p):
         '''cast_expression : unary_expression
                            | '(' type_name ')' cast_expression '''
-        pass
+        if len(p) == 2:
+            p[0] = p[1]
+        else:
+            # TODO : Handle casting
+            pass
 
     def p_multiplicative_expression(self, p):
         '''multiplicative_expression : cast_expression
                                      | multiplicative_expression '*' cast_expression
                                      | multiplicative_expression '/' cast_expression
                                      | multiplicative_expression '%' cast_expression '''
-        pass
+        if len(p) == 2:
+            p[0] = p[1]
+        else:
+            if p[2] == '*':
+                p[0] = p[1] * p[3]
+            elif p[2] == '/':
+                p[0] = p[1] / p[3]
+            elif p[2] == '%':
+                p[0] = p[1] % p[3]
 
     def p_additive_expression(self, p):
         '''additive_expression : multiplicative_expression
                                | additive_expression '+' multiplicative_expression
                                | additive_expression '-' multiplicative_expression '''
-        pass
+        if len(p) == 2:
+            p[0] = p[1]
+        else:
+            if p[2] == '+':
+                p[0] = p[1] + p[3]
+            elif p[2] == '-':
+                p[0] = p[1] - p[3]
 
     def p_shift_expression(self, p):
         '''shift_expression : additive_expression
                             | shift_expression LEFT_OP additive_expression
                             | shift_expression RIGHT_OP additive_expression '''
-        pass 
+        if len(p) == 2:
+            p[0] = p[1]
+        else:
+            if p[2] == '<<':
+                p[0] = p[1] << p[3]
+            elif p[2] == '>>':
+                p[0] = p[1] >> p[3]
 
     def p_relational_expression(self, p):
         '''relational_expression : shift_expression
@@ -92,48 +140,86 @@ class CParser(object):
                                  | relational_expression '>' shift_expression
                                  | relational_expression LE_OP shift_expression
                                  | relational_expression GE_OP shift_expression '''
-        pass
+        if len(p) == 2:
+            p[0] = p[1]
+        else:
+            if p[2] == '<':
+                p[0] = p[1] < p[3]
+            elif p[2] == '>':
+                p[0] = p[1] > p[3]
+            elif p[2] == '<=':
+                p[0] = p[1] <= p[3]
+            elif p[2] == '>=':
+                p[0] = p[1] >= p[3]
 
     def p_equality_expression(self, p):
         '''equality_expression : relational_expression
                                | equality_expression EQ_OP relational_expression
                                | equality_expression NE_OP relational_expression '''
-        pass
+        if len(p) == 2:
+            p[0] = p[1]
+        else:
+            if p[2] == '==':
+                p[0] = p[1] == p[3]
+            elif p[2] == '!=':
+                p[0] = p[1] != p[3]
 
     def p_and_expression(self, p):
         '''and_expression : equality_expression
                           | and_expression '&' equality_expression '''
-        pass
+        if len(p) == 2:
+            p[0] = p[1]
+        else:
+            p[0] = p[1] & p[3]
 
     def p_exclusive_or_expression(self, p):
         '''exclusive_or_expression : and_expression
                                    | exclusive_or_expression '^' and_expression '''
-        pass
+        if len(p) == 2:
+            p[0] = p[1]
+        else:
+            p[0] = p[1] ^ p[3]
 
     def p_inclusive_or_expression(self, p):
         '''inclusive_or_expression : exclusive_or_expression
                                    | inclusive_or_expression '|' exclusive_or_expression '''
-        pass
+        if len(p) == 2:
+            p[0] = p[1]
+        else:
+            p[0] = p[1] | p[3]
 
     def p_logical_and_expression(self, p):
         '''logical_and_expression : inclusive_or_expression
                                   | logical_and_expression AND_OP inclusive_or_expression '''
-        pass
+        if len(p) == 2:
+            p[0] = p[1]
+        else:
+            p[0] = p[1] and p[3]
 
     def p_logical_or_expression(self, p):
         '''logical_or_expression : logical_and_expression
                                  | logical_or_expression OR_OP logical_and_expression '''
-        pass
+        if len(p) == 2:
+            p[0] = p[1]
+        else:
+            p[0] = p[1] or p[3]
 
     def p_conditional_expression(self, p):
         '''conditional_expression : logical_or_expression
                                   | logical_or_expression '?' expression ':' conditional_expression '''
-        pass
+        if len(p) == 2:
+            p[0] = p[1]
+        else:
+            p[0] = p[3] if p[1] else p[5]
 
     def p_assignment_expression(self, p):
         '''assignment_expression : conditional_expression
                                  | unary_expression assignment_operator assignment_expression'''
-        pass
+        if len(p) == 2:
+            p[0] = p[1]
+        else:
+            # TODO : Handle assignment operators 
+            pass
 
     def p_assignment_operator(self, p):
         '''assignment_operator : '='
@@ -147,16 +233,20 @@ class CParser(object):
                                | AND_ASSIGN 
                                | XOR_ASSIGN 
                                | OR_ASSIGN '''
-        pass
+        p[0] = p[1]
 
     def p_expression(self, p):
         '''expression : assignment_expression
                       | expression ',' assignment_expression '''
-        pass
+        if len(p) == 2:
+            p[0] = p[1]
+        else:
+            p[1].extend(p[2])
+            p[0] = p[1]
 
     def p_constant_expression(self, p):
         '''constant_expression : conditional_expression '''
-        pass
+        p[0] = p[1]
 
     def p_declaration(self, p):
         '''declaration : declaration_specifiers ';'
@@ -179,7 +269,7 @@ class CParser(object):
                                    | STATIC
                                    | AUTO
                                    | REGISTER '''
-        pass
+        p[0] = p[1]
 
     # TODO : Check why IDENTIFIER token make type_specifier not working properly
     def p_type_specifier(self, p):
@@ -199,24 +289,34 @@ class CParser(object):
 
     def p_struct_or_union_specifier(self, p):
         '''struct_or_union_specifier : struct_or_union IDENTIFIER '{' struct_declaration_list '}' 
-                                     | struct_or_union '{' '}'
                                      | struct_or_union '{' struct_declaration_list '}'
                                      | struct_or_union IDENTIFIER '''
-        pass
+        if p[1] == 'struct':
+            struct = ir.Struct(struct_name = p[2], declaration_list = p[4])
+            p[0] = struct
+        else:
+            union = ir.Union()
 
     def p_struct_or_union(self, p):
         '''struct_or_union : STRUCT
                            | UNION '''
-        pass
+        p[0] = p[1]
 
     def p_struct_declaration_list(self, p):
         '''struct_declaration_list : struct_declaration
                                    | struct_declaration_list struct_declaration '''
-        pass
+        if len(p) == 2:
+            p[0] = p[1]
+        else:
+            p[1].extend(p[2])
+            p[0] = p[1]
 
     def p_struct_declaration(self, p):
         '''struct_declaration : specifier_qualifier_list struct_declarator_list ';' '''
-        print(p[:])
+        declaration = ir.Declaration(type_specifier = p[1], identifier = p[2][0][0], array_length =  p[2][0][1], bitfield = p[2][1])
+        # TODO: Handle case with declarator list
+
+        p[0] = [declaration]
 
     def p_specifier_qualifier_list(self, p):
         '''specifier_qualifier_list : type_specifier specifier_qualifier_list
@@ -226,34 +326,53 @@ class CParser(object):
         if len(p) == 3:
             p[0] = [p[1], p[2]]
         else:
-            p[0] = p[1]
+            p[0] = [p[1]]
 
     def p_struct_declarator_list(self, p):
         '''struct_declarator_list : struct_declarator
                                   | struct_declarator_list ',' struct_declarator '''
-        pass
+        if len(p) == 2:
+            p[0] = p[1]
+        else:
+            p[1].extend(p[3])
+            p[0] = p[1]
 
     def p_struct_declarator(self, p):
         '''struct_declarator : declarator
                                | ':' constant_expression
                                | declarator ':' constant_expression'''
-        pass
+        
+        # Return a splitted representation of struct declarator
+        if len(p) == 2:
+            p[0] = [p[1], None]
+        elif len(p) == 3:
+            p[0] = [None, p[2]]
+        else:
+            p[0] = [p[1], p[3]]
 
     def p_enum_specifier(self, p):
         '''enum_specifier : ENUM '{' enumerator_list '}'
                           | ENUM IDENTIFIER '{' enumerator_list '}'
-                          | ENUM IDENTIFIER'''
-        pass
+                          | ENUM IDENTIFIER '''
+        if len(p) == 5 and p[2] != '{':
+            p[0] = ir.Enumeration(p[2], p[4])
 
     def p_enumerator_list(self, p):
         '''enumerator_list : enumerator
                            | enumerator_list ',' enumerator '''
-        pass
+        if len(p) == 2:
+            p[0] = p[1]
+        else:
+            p[1].extend(p[2])
+            p[0] = p[1]
 
     def p_enumerator(self, p):
         '''enumerator : IDENTIFIER
                       | IDENTIFIER '=' constant_expression '''
-        pass
+        if len(p) == 2:
+            p[0] = (p[1],)
+        else:
+            p[0] = (p[1], p[3],)
 
     def p_type_qualifier(self, p):
         '''type_qualifier : CONST
@@ -263,7 +382,12 @@ class CParser(object):
     def p_declarator(self, p):
         '''declarator : pointer direct_declarator
                       | direct_declarator '''
-        pass
+        # Return only direct declarator
+        if len(p) == 2:
+            p[0] = p[1]
+        else:
+            # TODO : Handle pointer case
+            pass
 
     def p_direct_declarator(self, p):
         '''direct_declarator : IDENTIFIER
@@ -273,7 +397,19 @@ class CParser(object):
                              | direct_declarator '(' parameter_type_list ')'
                              | direct_declarator '(' identifier_list ')'  
                              | direct_declarator '('  ')' '''
-        pass
+        
+        # We are only interested about struct declaration that aren't 
+        # function pointer or pointer on array values. So they aren't
+        # handled.
+
+        # Will return identifier and it's array length.
+        if len(p) == 2:
+            p[0] = [p[1], 1]
+        elif len(p) == 5:
+            # Only handle array case
+            if p[2] == '[':
+                p[1][1] = p[3]
+                p[0] = p[1]
 
     def p_pointer(self, p):
         '''pointer : '*'
@@ -349,7 +485,7 @@ class CParser(object):
                      | selection_statement
                      | iteration_statement
                      | jump_statement '''
-        pass
+        p[0] = p[1]
 
     def p_labeled_statement(self, p):
         '''labeled_statement : IDENTIFIER ':' statement
@@ -362,12 +498,20 @@ class CParser(object):
                               | '{' statement_list '}'
                               | '{' declaration_list '}'
                               | '{' declaration_list statement_list '}' '''
-        pass
+        if len(p) == 3:
+            p[0] = []
+        elif len(p) == 4:
+            p[0] = p[2]
+        else:
+            p[0] = [p[2], p[3]]
 
     def p_declaration_list(self, p):
         '''declaration_list : declaration
                             | declaration_list declaration '''
-        pass
+        if len(p) == 2:
+            p[0] = p[1]
+        else:
+            pass
 
     def p_statement_list(self, p):
         '''statement_list : statement
@@ -421,20 +565,25 @@ class CParser(object):
                                   | type_qualifier declaration_specifiers '''
         pass 
 
-    def p_error(self, p ):
-        print(p)
-        pass
+    def p_error(self, p):
+        print(f'''Error: {p}''')
 
     def parse(self, data):
         self._parser.parse(data)
 
 if __name__ == "__main__":
-    parser = CParser(debug = False)
+    parser = CParser()
 
     data = '''
-        typedef struct {
+        typedef struct my_test_struct{
             const float test;
-            double test2;
-        }test;
+            int test3 : 16;
+            int a, b, c;
+            double test2[5];
+            //struct{
+            //    int t,
+            //}nested_struct;
+        }test_t;
     '''
+
     parser.parse(data)
