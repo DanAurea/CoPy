@@ -15,10 +15,12 @@ class CParser(object):
         else:
             lexer = lexer
 
-        self.ast     = {}
-        self.tokens  = lexer.tokens
-        self._parser = yacc.yacc(module = self, debug = debug, **kwargs)
-        self._debug  = debug
+        self._symbol_table = {}
+        self.ast           = {}
+
+        self.tokens        = lexer.tokens
+        self._parser       = yacc.yacc(module = self, debug = debug, **kwargs)
+        self._debug        = debug
 
     def _print_ast(self):
         # Print AST generated during parsing step
@@ -253,6 +255,15 @@ class CParser(object):
                        | declaration_specifiers init_declarator_list ';' '''
         pass
 
+    def p_declaration_specifiers(self, p):
+        '''declaration_specifiers : storage_class_specifier
+                                  | storage_class_specifier declaration_specifiers 
+                                  | type_specifier 
+                                  | type_specifier declaration_specifiers 
+                                  | type_qualifier 
+                                  | type_qualifier declaration_specifiers '''
+        pass
+    
     def p_init_declarator_list(self, p):
         '''init_declarator_list : init_declarator
                                 | init_declarator_list ',' init_declarator '''
@@ -271,7 +282,7 @@ class CParser(object):
                                    | REGISTER '''
         p[0] = p[1]
 
-    # TODO : Check why IDENTIFIER token make type_specifier not working properly
+    #  IDENTIFIER is used instead of TYPE_NAME (lexer doesn't make any distinction between both yet)
     def p_type_specifier(self, p):
         '''type_specifier : VOID
                           | CHAR
@@ -284,7 +295,7 @@ class CParser(object):
                           | UNSIGNED
                           | struct_or_union_specifier
                           | enum_specifier
-                          | TYPE_NAME '''
+                          | IDENTIFIER '''
         p[0] = p[1]
 
     def p_struct_or_union_specifier(self, p):
@@ -315,7 +326,6 @@ class CParser(object):
         '''struct_declaration : specifier_qualifier_list struct_declarator_list ';' '''
         declaration = ir.Declaration(type_specifier = p[1], identifier = p[2][0][0], array_length =  p[2][0][1], bitfield = p[2][1])
         # TODO: Handle case with declarator list
-
         p[0] = [declaration]
 
     def p_specifier_qualifier_list(self, p):
@@ -363,8 +373,10 @@ class CParser(object):
         if len(p) == 2:
             p[0] = p[1]
         else:
-            p[1].extend(p[2])
-            p[0] = p[1]
+            enumerator_list = p[1:]
+            enumerator_list.remove(',')
+
+            p[0] = enumerator_list
 
     def p_enumerator(self, p):
         '''enumerator : IDENTIFIER
@@ -396,7 +408,7 @@ class CParser(object):
                              | direct_declarator '[' ']' 
                              | direct_declarator '(' parameter_type_list ')'
                              | direct_declarator '(' identifier_list ')'  
-                             | direct_declarator '('  ')' '''
+                             | direct_declarator '(' ')' '''
         
         # We are only interested about struct declaration that aren't 
         # function pointer or pointer on array values. So they aren't
@@ -469,8 +481,8 @@ class CParser(object):
 
     def p_initializer(self, p):
         '''initializer : assignment_expression
-                       | '(' initializer_list ')'
-                       | '{' initializer_list '}' '''
+                       | '{' initializer_list '}'
+                       | '{' initializer_list ',' '}' '''
         pass
 
     def p_initializer_list(self, p):
@@ -530,7 +542,7 @@ class CParser(object):
         pass
 
     def p_iteration_statement(self, p):
-        '''iteration_statement : WHILE '(' expression ')'
+        '''iteration_statement : WHILE '(' expression ')' statement
                                | DO statement WHILE '(' expression ')' ';'
                                | FOR '(' expression_statement expression_statement ')' statement
                                | FOR '(' expression_statement expression_statement expression ')' statement '''
@@ -554,19 +566,15 @@ class CParser(object):
                                 | declaration_specifiers declarator compound_statement
                                 | declarator declaration_list compound_statement
                                 | declarator compound_statement '''
-        pass
-
-    def p_declaration_specifiers(self, p):
-        '''declaration_specifiers : storage_class_specifier
-                                  | storage_class_specifier declaration_specifiers 
-                                  | type_specifier 
-                                  | type_specifier declaration_specifiers 
-                                  | type_qualifier 
-                                  | type_qualifier declaration_specifiers '''
-        pass 
+        function = ir.Function()
 
     def p_error(self, p):
-        print(f'''Error: {p}''')
+        if p:
+            print(f'''Error: {p}''')
+            # Just discard the token and tell the parser it's okay.
+            self._parser.errok()
+        else:
+            print("Reach EOF")
 
     def parse(self, data):
         self._parser.parse(data)
@@ -574,16 +582,7 @@ class CParser(object):
 if __name__ == "__main__":
     parser = CParser()
 
-    data = '''
-        typedef struct my_test_struct{
-            const float test;
-            int test3 : 16;
-            int a, b, c;
-            double test2[5];
-            //struct{
-            //    int t,
-            //}nested_struct;
-        }test_t;
-    '''
+    with open("examples/complex_example.h", "rt") as include_file:
+        data = include_file.read()
 
     parser.parse(data)

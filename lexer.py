@@ -131,18 +131,13 @@ class CLexer(object):
     def t_PREPROC_DIRECTIVE(self, t):
         return t
 
-    def t_STRING_LITERAL(self, t):
-        r'L?"(\\.|[^\\\"])*"'
-        return t
-
     def t_IDENTIFIER(self, t):
         r'[a-zA-Z_][a-zA-Z_0-9]*'
         t.type = self.reserved.get(t.value, 'IDENTIFIER')    # Check for reserved words
         return t
-
-    def t_TYPE_NAME(self, t):
-        r'[a-zA-Z_][a-zA-Z_0-9]*'
-        t.type = self.reserved.get(t.value, 'IDENTIFIER')    # Check for reserved words
+    
+    def t_STRING_LITERAL(self, t):
+        r'L?"(\\.|[^\\\"])*"'
         return t
 
     CONSTANT_RE = "|".join([

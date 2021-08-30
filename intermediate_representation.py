@@ -7,6 +7,14 @@ class Struct(object):
         self.declaration_list = declaration_list
         self.packing          = packing
 
+    def __repr__(self):
+        s = f'''
+                Struct name: {self.struct_name} 
+                Declaration list: {self.declaration_list} 
+                Packing: {self.packing} 
+            '''
+        return s
+
 class Union(object):
     """
     """
@@ -15,6 +23,14 @@ class Union(object):
         self.union_name       = union_name
         self.declaration_list = declaration_list
         self.packing          = packing
+
+    def __repr__(self):
+        s = f'''
+                Union name: {self.union_name} 
+                Declaration list: {self.declaration_list} 
+                Packing: {self.packing} 
+            '''
+        return s
 
 class Declaration(object):
     """
@@ -25,6 +41,12 @@ class Declaration(object):
         self.identifier     = identifier
         self.array_length   = array_length
         self.bitfield       = bitfield
+
+    def __repr__(self):
+        s = f'''
+                {self.type_specifier} {self.identifier}[{self.array_length}]:{self.bitfield}
+            '''
+        return s
 
 class Enumeration(object):
 
