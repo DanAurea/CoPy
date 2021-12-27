@@ -12,6 +12,8 @@ class CLexer(object):
     Produce a token list from a C source code.
     """
 
+    DEFAULT_IDENTIFIER = {"type" : "IDENTIFIER", "value" : None}
+
     # Keywords
     reserved = {
                  "auto" : "AUTO",
@@ -118,7 +120,8 @@ class CLexer(object):
     t_NE_OP = r'!='
 
     def __init__(self, **kwargs):
-        self._lexer = lex.lex(module = self, **kwargs)
+        self._lexer        = lex.lex(module = self, **kwargs)
+        self._symbol_table = {}
 
     PREPROC_DIRECTIVE = r"|".join([r'\#' + directive for directive in [
                                                                             'include',
@@ -133,9 +136,17 @@ class CLexer(object):
 
     def t_IDENTIFIER(self, t):
         r'[a-zA-Z_][a-zA-Z_0-9]*'
-        t.type = self.reserved.get(t.value, 'IDENTIFIER')    # Check for reserved words
+
+        # Check first if identifier is a reserved word
+        if t.value in self.reserved:
+            t.type = self.reserved[t.value] 
+        else:
+            if t.value not in self._symbol_table:
+                self._symbol_table[t.value] = self.DEFAULT_IDENTIFIER
+            
+            t.type = self._symbol_table[t.value]["type"]
         return t
-    
+
     def t_STRING_LITERAL(self, t):
         r'L?"(\\.|[^\\\"])*"'
         return t

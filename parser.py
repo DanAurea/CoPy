@@ -11,14 +11,14 @@ class CParser(object):
 
     def __init__(self, lexer = None, debug = False, **kwargs):
         if not lexer:
-            lexer = CLexer()
+            self._lexer = CLexer()
         else:
-            lexer = lexer
+            self._lexer = lexer
 
         self._symbol_table = {}
         self.ast           = {}
 
-        self.tokens        = lexer.tokens
+        self.tokens        = self._lexer.tokens
         self._parser       = yacc.yacc(module = self, debug = debug, **kwargs)
         self._debug        = debug
 
@@ -45,12 +45,12 @@ class CParser(object):
 
     def p_postfix_expression(self, p):
         '''postfix_expression : primary_expression
-                              | postfix_expression '[' expression ']' 
-                              | postfix_expression '(' ')' 
-                              | postfix_expression '(' argument_expression_list ')' 
-                              | postfix_expression '.' IDENTIFIER 
-                              | postfix_expression PTR_OP IDENTIFIER 
-                              | postfix_expression INC_OP 
+                              | postfix_expression '[' expression ']'
+                              | postfix_expression '(' ')'
+                              | postfix_expression '(' argument_expression_list ')'
+                              | postfix_expression '.' IDENTIFIER
+                              | postfix_expression PTR_OP IDENTIFIER
+                              | postfix_expression INC_OP
                               | postfix_expression DEC_OP '''
         if len(p) == 2:
             p[0] = p[1]
@@ -61,17 +61,17 @@ class CParser(object):
         '''argument_expression_list : assignment_expression
                                     | argument_expression_list ',' assignment_expression '''
         if len(p) == 2:
-            p[0] = p[1]
+            p[0] = [p[1]]
         else:
-            p[1].extend(p[3])
+            p[1].append(p[3])
             p[0] = p[1]
 
     def p_unary_expression(self, p):
         '''unary_expression : postfix_expression
-                            | INC_OP unary_expression 
-                            | DEC_OP unary_expression 
-                            | unary_operator cast_expression 
-                            | SIZEOF unary_expression 
+                            | INC_OP unary_expression
+                            | DEC_OP unary_expression
+                            | unary_operator cast_expression
+                            | SIZEOF unary_expression
                             | SIZEOF '(' type_name ')' '''
         if len(p) == 2:
             p[0] = p[1]
@@ -241,9 +241,9 @@ class CParser(object):
         '''expression : assignment_expression
                       | expression ',' assignment_expression '''
         if len(p) == 2:
-            p[0] = p[1]
+            p[0] = [p[1]]
         else:
-            p[1].extend(p[2])
+            p[1].append(p[2])
             p[0] = p[1]
 
     def p_constant_expression(self, p):
@@ -251,28 +251,41 @@ class CParser(object):
         p[0] = p[1]
 
     def p_declaration(self, p):
-        '''declaration : declaration_specifiers ';'
+        '''declaration : declaration_specifiers ';' 
                        | declaration_specifiers init_declarator_list ';' '''
-        pass
+        if p[1][0] == "typedef":
+            # self._lexer._symbol_table[p[2][0]]["type"] = "TYPE_NAME"
+            self._lexer._symbol_table['cardinal']['type'] = "TYPE_NAME"
 
     def p_declaration_specifiers(self, p):
         '''declaration_specifiers : storage_class_specifier
-                                  | storage_class_specifier declaration_specifiers 
-                                  | type_specifier 
-                                  | type_specifier declaration_specifiers 
-                                  | type_qualifier 
+                                  | storage_class_specifier declaration_specifiers
+                                  | type_specifier
+                                  | type_specifier declaration_specifiers
+                                  | type_qualifier
                                   | type_qualifier declaration_specifiers '''
-        pass
-    
+        #TODO: Handle different rules (type qualifier/specifier, storage)
+        if len(p) == 2:
+            p[0] = p[1]
+        else:
+            p[0] = p[1:]
+
     def p_init_declarator_list(self, p):
         '''init_declarator_list : init_declarator
                                 | init_declarator_list ',' init_declarator '''
-        pass
+        if len(p) == 2:
+            p[0] = [p[1]]
+        else:
+            p[1].append(p[3])
+            p[0] = p[1]
 
     def p_init_declarator(self, p):
         '''init_declarator : declarator
                            | declarator '=' initializer '''
-        pass 
+        if len(p) == 2:
+            p[0] = p[1]
+        else:
+            p[0] = p[1], p[3]
 
     def p_storage_class_specifier(self, p):
         '''storage_class_specifier : TYPEDEF
@@ -282,7 +295,6 @@ class CParser(object):
                                    | REGISTER '''
         p[0] = p[1]
 
-    #  IDENTIFIER is used instead of TYPE_NAME (lexer doesn't make any distinction between both yet)
     def p_type_specifier(self, p):
         '''type_specifier : VOID
                           | CHAR
@@ -295,15 +307,15 @@ class CParser(object):
                           | UNSIGNED
                           | struct_or_union_specifier
                           | enum_specifier
-                          | IDENTIFIER '''
+                          | TYPE_NAME '''
         p[0] = p[1]
 
     def p_struct_or_union_specifier(self, p):
-        '''struct_or_union_specifier : struct_or_union IDENTIFIER '{' struct_declaration_list '}' 
+        '''struct_or_union_specifier : struct_or_union IDENTIFIER '{' struct_declaration_list '}'
                                      | struct_or_union '{' struct_declaration_list '}'
                                      | struct_or_union IDENTIFIER '''
         if p[1] == 'struct':
-            struct = ir.Struct(struct_name = p[2], declaration_list = p[4])
+            struct = ir.Struct(struct_name = p[2], declaration_list = p[3])
             p[0] = struct
         else:
             union = ir.Union()
@@ -317,74 +329,75 @@ class CParser(object):
         '''struct_declaration_list : struct_declaration
                                    | struct_declaration_list struct_declaration '''
         if len(p) == 2:
-            p[0] = p[1]
+            p[0] = [p[1]]
         else:
-            p[1].extend(p[2])
+            p[1].append(p[3])
             p[0] = p[1]
 
     def p_struct_declaration(self, p):
         '''struct_declaration : specifier_qualifier_list struct_declarator_list ';' '''
-        declaration = ir.Declaration(type_specifier = p[1], identifier = p[2][0][0], array_length =  p[2][0][1], bitfield = p[2][1])
+        print(p[:])
+        # declaration = ir.Declaration(type_specifier = p[1], identifier = p[2][0][0], array_length =  p[2][0][1], bitfield = p[2][1])
         # TODO: Handle case with declarator list
-        p[0] = [declaration]
+        # p[0] = [declaration]
 
+    # TODO: Handle error whenever type is a typedef not yet declared. (Ambiguity with IDENTIFIER otherwise)
     def p_specifier_qualifier_list(self, p):
         '''specifier_qualifier_list : type_specifier specifier_qualifier_list
                                     | type_specifier
                                     | type_qualifier specifier_qualifier_list
                                     | type_qualifier '''
         if len(p) == 3:
-            p[0] = [p[1], p[2]]
+            p[0] = p[1], p[2]
         else:
-            p[0] = [p[1]]
+            p[0] = p[1]
 
     def p_struct_declarator_list(self, p):
         '''struct_declarator_list : struct_declarator
-                                  | struct_declarator_list ',' struct_declarator '''
+                                  | struct_declarator_list ',' struct_declarator'''
         if len(p) == 2:
-            p[0] = p[1]
+            p[0] = [p[1]]
         else:
-            p[1].extend(p[3])
+            p[1].append(p[3])
             p[0] = p[1]
 
     def p_struct_declarator(self, p):
         '''struct_declarator : declarator
-                               | ':' constant_expression
-                               | declarator ':' constant_expression'''
+                             | ':' constant_expression
+                             | declarator ':' constant_expression'''
         
         # Return a splitted representation of struct declarator
         if len(p) == 2:
-            p[0] = [p[1], None]
+            p[0] = p[1], None
         elif len(p) == 3:
-            p[0] = [None, p[2]]
+            p[0] = None, p[2]
         else:
-            p[0] = [p[1], p[3]]
+            p[0] = p[1], p[3]
 
     def p_enum_specifier(self, p):
         '''enum_specifier : ENUM '{' enumerator_list '}'
                           | ENUM IDENTIFIER '{' enumerator_list '}'
-                          | ENUM IDENTIFIER '''
-        if len(p) == 5 and p[2] != '{':
-            p[0] = ir.Enumeration(p[2], p[4])
+                          | ENUM IDENTIFIER'''
+        #TODO: Handle enumeration with identifier
+        if len(p) == 5:
+            p[0] = p[3]
 
     def p_enumerator_list(self, p):
         '''enumerator_list : enumerator
-                           | enumerator_list ',' enumerator '''
+                           | enumerator_list ',' enumerator'''
         if len(p) == 2:
-            p[0] = p[1]
+            p[0] = [p[1]]
         else:
-            enumerator_list = p[1:]
-            enumerator_list.remove(',')
-
-            p[0] = enumerator_list
+            p[1].append(p[3])
+            p[0] = p[1]
 
     def p_enumerator(self, p):
         '''enumerator : IDENTIFIER
                       | IDENTIFIER '=' constant_expression '''
         if len(p) == 2:
-            p[0] = (p[1],)
+            p[0] = p[1]
         else:
-            p[0] = (p[1], p[3],)
+            p[0] = p[1], p[3]
 
     def p_type_qualifier(self, p):
         '''type_qualifier : CONST
@@ -404,10 +417,10 @@ class CParser(object):
     def p_direct_declarator(self, p):
         '''direct_declarator : IDENTIFIER
                              | '(' declarator ')'
-                             | direct_declarator '[' constant_expression ']' 
-                             | direct_declarator '[' ']' 
+                             | direct_declarator '[' constant_expression ']'
+                             | direct_declarator '[' ']'
                              | direct_declarator '(' parameter_type_list ')'
-                             | direct_declarator '(' identifier_list ')'  
+                             | direct_declarator '(' identifier_list ')'
                              | direct_declarator '(' ')' '''
         
         # We are only interested about struct declaration that aren't 
@@ -416,7 +429,7 @@ class CParser(object):
 
         # Will return identifier and it's array length.
         if len(p) == 2:
-            p[0] = [p[1], 1]
+            p[0] = p[1]
         elif len(p) == 5:
             # Only handle array case
             if p[2] == '[':
@@ -433,17 +446,25 @@ class CParser(object):
     def p_type_qualifier_list(self, p):
         '''type_qualifier_list : type_qualifier
                                | type_qualifier_list type_qualifier '''
-        pass
+        if len(p) == 2:
+            p[0] = [p[1]]
+        else:
+            p[1].append(p[2])
+            p[0] = p[1]
 
     def p_parameter_type_list(self, p):
         '''parameter_type_list : parameter_list
-                               | parameter_list ',' ELLIPSIS '''
+                               | parameter_list ',' ELLIPSIS'''
         pass
 
     def p_parameter_list(self, p):
         '''parameter_list : parameter_declaration
                           | parameter_list ',' parameter_declaration '''
-        pass
+        if len(p) == 2:
+            p[0] = [p[1]]
+        else:
+            p[1].append(p[2])
+            p[0] = p[1]
 
     def p_parameter_declaration(self, p):
         '''parameter_declaration : declaration_specifiers declarator
@@ -454,7 +475,11 @@ class CParser(object):
     def p_identifier_list(self, p):
         '''identifier_list : IDENTIFIER
                            | identifier_list ',' IDENTIFIER '''
-        pass
+        if len(p) == 2:
+            p[0] = [p[1]]
+        else:
+            p[1].append(p[2])
+            p[0] = p[1]
 
     def p_type_name(self, p):
         '''type_name : specifier_qualifier_list
@@ -472,7 +497,7 @@ class CParser(object):
                                       | '[' ']'
                                       | '[' constant_expression ']'
                                       | direct_abstract_declarator '[' ']'
-                                      | direct_abstract_declarator '[' constant_expression ']' 
+                                      | direct_abstract_declarator '[' constant_expression ']'
                                       | '(' ')'
                                       | '(' parameter_type_list ')'
                                       | direct_abstract_declarator '(' ')'
@@ -488,7 +513,11 @@ class CParser(object):
     def p_initializer_list(self, p):
         '''initializer_list : initializer
                             | initializer_list ',' initializer '''
-        pass
+        if len(p) == 2:
+            p[0] = [p[1]]
+        else:
+            p[1].append(p[2])
+            p[0] = p[1]
 
     def p_statement(self, p):
         '''statement : labeled_statement
@@ -521,14 +550,19 @@ class CParser(object):
         '''declaration_list : declaration
                             | declaration_list declaration '''
         if len(p) == 2:
-            p[0] = p[1]
+            p[0] = [p[1]]
         else:
-            pass
+            p[1].append(p[2])
+            p[0] = p[1]
 
     def p_statement_list(self, p):
         '''statement_list : statement
                           | statement_list statement '''
-        pass
+        if len(p) == 2:
+            p[0] = [p[1]]
+        else:
+            p[1].append(p[2])
+            p[0] = p[1]
 
     def p_expression_statement(self, p):
         '''expression_statement : ';'
@@ -559,7 +593,7 @@ class CParser(object):
     def p_external_declaration(self, p):
         '''external_declaration : function_definition
                                 | declaration '''
-        pass
+        print(p[:])
 
     def p_function_definition(self, p):
         '''function_definition : declaration_specifiers declarator declaration_list compound_statement
@@ -585,4 +619,33 @@ if __name__ == "__main__":
     with open("examples/complex_example.h", "rt") as include_file:
         data = include_file.read()
 
+    data = """
+            /**
+             * @enum cardinal engine.h
+             */
+            typedef enum {north, east, south, west}cardinal; /**< Liste des directions */
+
+            /**
+             * @enum unitName engine.h
+             */
+            typedef enum{empty, decors, knight, scout, assassin, cleric, pyromancer, enchantress,
+                        dragonborn, darkWitch, lightningTotem, barrierTotem, mudGolem, golemAmbusher,
+                        frostGolem, stoneGolem, dragonTyrant, berserker, beastRider, poisonWisp, furgon}unitName; /**< Liste énumérée des noms d'unité */
+
+            /**
+             * @enum unitEffect engine.h
+             */
+            typedef enum{none, POWER_BONUS, ARMOR_BONUS, BARRIER, POISON, PARALYSE, FOCUS}unitEffect; /**< Représentation des différents status */
+
+            /**
+             * @struct targetStat engine.h
+             * Représente les informations liées aux cibles
+             */
+             typedef struct{
+                cardinal vertRange; /**< Portée verticale */
+                short horizRange;  /**< Portée horizontale */
+                short ringSize;  /**< Taille de l'anneau */
+                short line; /**< Ciblage en ligne */
+            }targetStat;
+            """
     parser.parse(data)
