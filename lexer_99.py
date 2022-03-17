@@ -7,47 +7,50 @@ E = f"""[Ee][+-]?{DIGIT}+"""
 FLOAT_SUFFIX = r"[fF]"
 INT_SUFFIX = r"[uU]"
 
-class CLexer(object):
+class C99Lexer(object):
     """
     Produce a token list from a C source code.
     """
 
-    DEFAULT_IDENTIFIER = {"type" : "IDENTIFIER", "value" : None}
-
     # Keywords
     reserved = {
-                 "auto" : "AUTO",
-                 "break" : "BREAK",
-                 "case" : "CASE",
-                 "char" : "CHAR",
-                 "const" : "CONST",
-                 "continue" : "CONTINUE",
-                 "default" : "DEFAULT",
-                 "do" : "DO",
-                 "double" : "DOUBLE",
-                 "else" : "ELSE",
-                 "enum" : "ENUM",
-                 "extern" : "EXTERN",
-                 "float" : "FLOAT",
-                 "for" : "FOR",
-                 "goto" : "GOTO",
-                 "if" : "IF",
-                 "int" : "INT",
-                 "long" : "LONG",
-                 "register" : "REGISTER",
-                 "return" : "RETURN",
-                 "short" : "SHORT",
-                 "signed" : "SIGNED",
-                 "sizeof" : "SIZEOF",
-                 "static" : "STATIC",
-                 "struct" : "STRUCT",
-                 "switch" : "SWITCH",
-                 "typedef" : "TYPEDEF",
-                 "union" : "UNION",
-                 "unsigned" : "UNSIGNED",
-                 "void" : "VOID",
-                 "volatile" : "VOLATILE",
-                 "while" : "WHILE"
+                    "auto" : "AUTO",
+                    "break" : "BREAK",
+                    "case" : "CASE",
+                    "char" : "CHAR",
+                    "const" : "CONST",
+                    "continue" : "CONTINUE",
+                    "default" : "DEFAULT",
+                    "do" : "DO",
+                    "double" : "DOUBLE",
+                    "else" : "ELSE",
+                    "enum" : "ENUM",
+                    "extern" : "EXTERN",
+                    "float" : "FLOAT",
+                    "for" : "FOR",
+                    "goto" : "GOTO",
+                    "if" : "IF",
+                    "int" : "INT",
+                    "inline" : "INLINE",
+                    "long" : "LONG",
+                    "register" : "REGISTER",
+                    "restrict" : "RESTRICT",
+                    "return" : "RETURN",
+                    "short" : "SHORT",
+                    "signed" : "SIGNED",
+                    "sizeof" : "SIZEOF",
+                    "static" : "STATIC",
+                    "struct" : "STRUCT",
+                    "switch" : "SWITCH",
+                    "typedef" : "TYPEDEF",
+                    "union" : "UNION",
+                    "unsigned" : "UNSIGNED",
+                    "void" : "VOID",
+                    "volatile" : "VOLATILE",
+                    "while" : "WHILE",
+                    "_Bool": "BOOLEAN",
+                    "_Complex": "COMPLEX",
+                    "_Imaginary": "IMAGINARY",
             }
 
     # This class attribute should be set because ply
@@ -59,8 +62,9 @@ class CLexer(object):
 
                 "PREPROC_DIRECTIVE",
 
+                "TYPEDEF_NAME",
+                
                 "IDENTIFIER",
-                "TYPE_NAME",
                 "CONSTANT",
                 "STRING_LITERAL",
 
@@ -93,7 +97,7 @@ class CLexer(object):
                  '!', '~', '-', '+', '*', '/', '%', '<', '>', '^', '|', '?']
 
     # Skip whitespaces
-    t_ignore = ' \t\n'
+    t_ignore = ' \t'
     
     # Operators
     t_ELLIPSIS = r'\.\.\.'
@@ -142,8 +146,8 @@ class CLexer(object):
             t.type = self.reserved[t.value] 
         else:
             if t.value not in self._symbol_table:
-                self._symbol_table[t.value] = self.DEFAULT_IDENTIFIER
-            
+                self._symbol_table[t.value] = {"type": "IDENTIFIER", "value": None}
+
             t.type = self._symbol_table[t.value]["type"]
         return t
 
@@ -171,7 +175,13 @@ class CLexer(object):
 
     def t_COMMENT(self, t):
         r'\/\*[\s\S]*?\*\/+|//.*'
+        # Comments should be stored into a data structure based on header files and then restored during code generation
         pass
+
+    # Define a rule so we can track line numbers
+    def t_newline(self, t):
+        r'\n+'
+        t.lexer.lineno += len(t.value)
 
     # Error handling when an incorrect character is
     # being processed by the lexer.
@@ -198,7 +208,7 @@ class CLexer(object):
         return token_list
 
 if __name__ == "__main__":
-    lexer = CLexer()
+    lexer = C99Lexer()
 
     with open("examples/example.h", "rt") as file:
         data = file.read()

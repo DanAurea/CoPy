@@ -2,14 +2,14 @@ class Struct(object):
     """
     """
 
-    def __init__(self, struct_name, declaration_list, packing = 4):
-        self.struct_name      = struct_name
+    def __init__(self, identifier, declaration_list, packing = 4):
+        self.identifier      = identifier
         self.declaration_list = declaration_list
         self.packing          = packing
 
     def __repr__(self):
         s = f'''
-                Struct name: {self.struct_name} 
+                Struct name: {self.identifier} 
                 Declaration list: {self.declaration_list} 
                 Packing: {self.packing} 
             '''
@@ -19,8 +19,8 @@ class Union(object):
     """
     """
 
-    def __init__(self, union_name, declaration_list, packing = 4):
-        self.union_name       = union_name
+    def __init__(self, identifier, declaration_list, packing = 4):
+        self.identifier       = identifier
         self.declaration_list = declaration_list
         self.packing          = packing
 
@@ -50,9 +50,17 @@ class Declaration(object):
 
 class Enumeration(object):
 
-    def __init__(self, enum_name, enumerator_list):
-        self.enum_name       = enum_name
+    def __init__(self, identifier = None, enumerator_list = None, packing = 4):
+        self.identifier = identifier
         self.enumerator_list = enumerator_list
+        self.packing          = packing
+
+    def __repr__(self):
+        s = f'''
+                Enumeration name: {self.identifier}
+                Enumerator list: {self.enumerator_list}
+                Packing : {self.packing}'''
+        return s
 
 class Function(object):
     
