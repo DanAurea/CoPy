@@ -32,19 +32,18 @@ class Union(object):
             '''
         return s
 
-class Declaration(object):
+class StructDeclaration(object):
     """
+    specifier_qualifier_list struct_declarator_list
     """
-    
-    def __init__(self, type_specifier, identifier, array_length = 1, bitfield = None):
-        self.type_specifier = type_specifier
-        self.identifier     = identifier
-        self.array_length   = array_length
-        self.bitfield       = bitfield
+    def __init__(self, specifier_qualifier_list, struct_declarator_list):
+        self.specifier_qualifier_list = specifier_qualifier_list
+        self.struct_declarator_list   = struct_declarator_list
 
     def __repr__(self):
+        new_line = '\n' 
         s = f'''
-                {self.type_specifier} {self.identifier}[{self.array_length}]:{self.bitfield}
+                {" ".join(self.specifier_qualifier_list)} {" ".join(self.struct_declarator_list)};
             '''
         return s
 

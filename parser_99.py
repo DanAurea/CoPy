@@ -293,12 +293,13 @@ class C99Parser(object):
                        | declaration_specifiers init_declarator_list ';' '''
         if len(p) == 4:
             declaration_specifiers = p[1]
-            if type(declaration_specifiers[1]) == ir.Enumeration:
-                declaration_specifiers[1].identifier = p[2][0]
+            
+            # TODO: Handle all aliases            
+            declaration_specifiers[1].identifier = p[2][0]
 
             if p[1][0] == "typedef" and declaration_specifiers[1].identifier:
                 # TODO: Handle all aliases
-                self._lexer._symbol_table['cardinal']["type"] = "TYPEDEF_NAME"
+                self._lexer._symbol_table[declaration_specifiers[1].identifier]["type"] = "TYPEDEF_NAME"
                 self._lexer._symbol_table[declaration_specifiers[1].identifier]["value"] = declaration_specifiers[1]
 
     @debug_print
@@ -400,9 +401,7 @@ class C99Parser(object):
     @debug_print
     def p_struct_declaration(self, p):
         '''struct_declaration : specifier_qualifier_list struct_declarator_list ';' '''
-        declaration = p[1:-1]
-
-        p[0] = declaration
+        p[0] = ir.StructDeclaration(p[1], p[2])
 
     @debug_print
     # TODO: Handle error whenever type is a typedef not yet declared. (Ambiguity with IDENTIFIER otherwise)
@@ -412,9 +411,10 @@ class C99Parser(object):
                                     | type_qualifier 
                                     | type_qualifier specifier_qualifier_list'''
         if len(p) == 3:
-            p[0] = p[1], p[2]
+            p[0] = [p[1],]
+            p[0].extend(p[2])
         else:
-            p[0] = p[1]
+            p[0] = [p[1],]
 
     @debug_print
     def p_struct_declarator_list(self, p):
@@ -521,8 +521,7 @@ class C99Parser(object):
         elif len(p) == 5:
             # Only handle array case
             if p[2] == '[':
-                p[1][1] = p[3]
-                p[0] = p[1]
+                p[0] = f'''{p[1]}[{p[3]}]'''
 
     @debug_print
     def p_pointer(self, p):
@@ -752,7 +751,7 @@ class C99Parser(object):
         self._parser.parse(data)
 
 if __name__ == "__main__":
-    parser = C99Parser(debug = False)
+    parser = C99Parser(debug = True)
 
     with open("examples/complex_example.h", "rt") as include_file:
         data = include_file.read()
@@ -765,7 +764,13 @@ if __name__ == "__main__":
 
             typedef struct
             {
-            int dir;
-            }truc;
+            unsigned int sectorSignatureCompat;
+            unsigned char reserved[480];
+            unsigned int sectorSignature;
+            unsigned int numberFreeCluster;
+            unsigned int numberAllocatedCluster;
+            unsigned char reserved2[12];
+            unsigned int sectorSignatureEnd;
+            }fsInformationSector;
             '''
     parser.parse(data)
