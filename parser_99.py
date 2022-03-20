@@ -753,24 +753,7 @@ class C99Parser(object):
 if __name__ == "__main__":
     parser = C99Parser(debug = True)
 
-    with open("examples/complex_example.h", "rt") as include_file:
+    with open("examples/fat32.h", "rt") as include_file:
         data = include_file.read()
 
-    data = '''
-            /**
-             * @enum cardinal engine.h
-             */
-            //typedef enum {north = 0, east, south, west}cardinal; /**< Liste des directions */
-
-            typedef struct
-            {
-            unsigned int sectorSignatureCompat;
-            unsigned char reserved[480];
-            unsigned int sectorSignature;
-            unsigned int numberFreeCluster;
-            unsigned int numberAllocatedCluster;
-            unsigned char reserved2[12];
-            unsigned int sectorSignatureEnd;
-            }fsInformationSector;
-            '''
     parser.parse(data)
