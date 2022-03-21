@@ -34,9 +34,6 @@ class C99Parser(object):
         else:
             self._lexer = lexer
 
-        self._symbol_table = {}
-        self.ast           = {}
-
         self.tokens        = self._lexer.tokens
         self._parser       = yacc.yacc(module = self, debug = debug, **kwargs)
         self._debug        = debug
