@@ -1,26 +1,8 @@
 from lexer_99 import C99Lexer
-from functools import wraps
+from utils import debug_production
 
 import intermediate_representation as ir
 import ply.yacc as yacc
-
-def debug_print(func):
-    """
-    Debug print for production rules
-    
-    :param      func:  The function
-    :type       func:  { type_description }
-    """
-    @wraps(func)
-    def inner(self, p):
-        # If func is not called then production rules won't return anything.
-        func(self, p)
-        if self._debug:
-            print(f'''Production rule: {func.__name__} produced {p[1:]} ''')
-            print("-" * 80)
-
-    inner.co_firstlineno = func.__code__.co_firstlineno
-    return inner
 
 class C99Parser(object):
     """
@@ -38,12 +20,12 @@ class C99Parser(object):
         self._parser       = yacc.yacc(module = self, debug = debug, **kwargs)
         self._debug        = debug
 
-    @debug_print
+    @debug_production
     def p_translation_unit(self, p):
         '''translation_unit : external_declaration 
                             | translation_unit external_declaration'''
 
-    @debug_print
+    @debug_production
     def p_primary_expression(self, p):
         '''primary_expression : IDENTIFIER
                               | CONSTANT
@@ -54,7 +36,7 @@ class C99Parser(object):
         else:
             p[0] = p[1]
 
-    @debug_print
+    @debug_production
     def p_postfix_expression(self, p):
         '''postfix_expression : primary_expression
                               | postfix_expression '[' expression ']'
@@ -72,7 +54,7 @@ class C99Parser(object):
         else:
             p[0] = p[1:]
 
-    @debug_print
+    @debug_production
     def p_argument_expression_list(self, p):
         '''argument_expression_list : assignment_expression
                                     | argument_expression_list ',' assignment_expression '''
@@ -82,7 +64,7 @@ class C99Parser(object):
             p[1].append(p[3])
             p[0] = p[1]
 
-    @debug_print
+    @debug_production
     def p_unary_expression(self, p):
         '''unary_expression : postfix_expression
                             | INC_OP unary_expression
@@ -96,7 +78,7 @@ class C99Parser(object):
             # TODO : Handle other expression, currently I'm only interested with postfix
             pass
 
-    @debug_print
+    @debug_production
     def p_unary_operator(self, p):
         '''unary_operator : '&'
                           | '*'  
@@ -106,7 +88,7 @@ class C99Parser(object):
                           | '!' '''
         p[0] = p[1]
 
-    @debug_print
+    @debug_production
     def p_cast_expression(self, p):
         '''cast_expression : unary_expression
                            | '(' type_name ')' cast_expression '''
@@ -116,7 +98,7 @@ class C99Parser(object):
             # TODO : Handle casting
             pass
 
-    @debug_print
+    @debug_production
     def p_multiplicative_expression(self, p):
         '''multiplicative_expression : cast_expression
                                      | multiplicative_expression '*' cast_expression
@@ -132,7 +114,7 @@ class C99Parser(object):
             elif p[2] == '%':
                 p[0] = p[1] % p[3]
 
-    @debug_print
+    @debug_production
     def p_additive_expression(self, p):
         '''additive_expression : multiplicative_expression
                                | additive_expression '+' multiplicative_expression
@@ -145,7 +127,7 @@ class C99Parser(object):
             elif p[2] == '-':
                 p[0] = p[1] - p[3]
 
-    @debug_print
+    @debug_production
     def p_shift_expression(self, p):
         '''shift_expression : additive_expression
                             | shift_expression LEFT_OP additive_expression
@@ -158,7 +140,7 @@ class C99Parser(object):
             elif p[2] == '>>':
                 p[0] = p[1] >> p[3]
 
-    @debug_print
+    @debug_production
     def p_relational_expression(self, p):
         '''relational_expression : shift_expression
                                  | relational_expression '<' shift_expression
@@ -177,7 +159,7 @@ class C99Parser(object):
             elif p[2] == '>=':
                 p[0] = p[1] >= p[3]
 
-    @debug_print
+    @debug_production
     def p_equality_expression(self, p):
         '''equality_expression : relational_expression
                                | equality_expression EQ_OP relational_expression
@@ -190,7 +172,7 @@ class C99Parser(object):
             elif p[2] == '!=':
                 p[0] = p[1] != p[3]
 
-    @debug_print
+    @debug_production
     def p_and_expression(self, p):
         '''and_expression : equality_expression
                           | and_expression '&' equality_expression '''
@@ -199,7 +181,7 @@ class C99Parser(object):
         else:
             p[0] = p[1] & p[3]
 
-    @debug_print
+    @debug_production
     def p_exclusive_or_expression(self, p):
         '''exclusive_or_expression : and_expression
                                    | exclusive_or_expression '^' and_expression '''
@@ -208,7 +190,7 @@ class C99Parser(object):
         else:
             p[0] = p[1] ^ p[3]
 
-    @debug_print
+    @debug_production
     def p_inclusive_or_expression(self, p):
         '''inclusive_or_expression : exclusive_or_expression
                                    | inclusive_or_expression '|' exclusive_or_expression '''
@@ -217,7 +199,7 @@ class C99Parser(object):
         else:
             p[0] = p[1] | p[3]
 
-    @debug_print
+    @debug_production
     def p_logical_and_expression(self, p):
         '''logical_and_expression : inclusive_or_expression
                                   | logical_and_expression AND_OP inclusive_or_expression '''
@@ -226,7 +208,7 @@ class C99Parser(object):
         else:
             p[0] = p[1] and p[3]
 
-    @debug_print
+    @debug_production
     def p_logical_or_expression(self, p):
         '''logical_or_expression : logical_and_expression
                                  | logical_or_expression OR_OP logical_and_expression '''
@@ -235,7 +217,7 @@ class C99Parser(object):
         else:
             p[0] = p[1] or p[3]
 
-    @debug_print
+    @debug_production
     def p_conditional_expression(self, p):
         '''conditional_expression : logical_or_expression
                                   | logical_or_expression '?' expression ':' conditional_expression '''
@@ -244,7 +226,7 @@ class C99Parser(object):
         else:
             p[0] = p[3] if p[1] else p[5]
 
-    @debug_print
+    @debug_production
     def p_assignment_expression(self, p):
         '''assignment_expression : conditional_expression
                                  | unary_expression assignment_operator assignment_expression'''
@@ -254,7 +236,7 @@ class C99Parser(object):
             # TODO : Handle assignment operators 
             pass
 
-    @debug_print
+    @debug_production
     def p_assignment_operator(self, p):
         '''assignment_operator : '='
                                | MUL_ASSIGN 
@@ -269,7 +251,7 @@ class C99Parser(object):
                                | OR_ASSIGN '''
         p[0] = p[1]
 
-    @debug_print
+    @debug_production
     def p_expression(self, p):
         '''expression : assignment_expression
                       | expression ',' assignment_expression '''
@@ -279,12 +261,12 @@ class C99Parser(object):
             p[1].append(p[2])
             p[0] = p[1]
 
-    @debug_print
+    @debug_production
     def p_constant_expression(self, p):
         '''constant_expression : conditional_expression '''
         p[0] = p[1]
 
-    @debug_print
+    @debug_production
     def p_declaration(self, p):
         '''declaration : declaration_specifiers ';' 
                        | declaration_specifiers init_declarator_list ';' '''
@@ -299,7 +281,7 @@ class C99Parser(object):
                 self._lexer._symbol_table[declaration_specifiers[1].identifier]["type"] = "TYPEDEF_NAME"
                 self._lexer._symbol_table[declaration_specifiers[1].identifier]["value"] = declaration_specifiers[1]
 
-    @debug_print
+    @debug_production
     def p_declaration_specifiers(self, p):
         '''declaration_specifiers : storage_class_specifier
                                   | storage_class_specifier declaration_specifiers
@@ -316,7 +298,7 @@ class C99Parser(object):
         elif len(p) == 3:
             p[0] = p[1], p[2]
 
-    @debug_print
+    @debug_production
     def p_init_declarator_list(self, p):
         '''init_declarator_list : init_declarator
                                 | init_declarator_list ',' init_declarator '''
@@ -326,7 +308,7 @@ class C99Parser(object):
             p[1].append(p[3])
             p[0] = p[1]
 
-    @debug_print
+    @debug_production
     def p_init_declarator(self, p):
         '''init_declarator : declarator
                            | declarator '=' initializer '''
@@ -335,7 +317,7 @@ class C99Parser(object):
         else:
             p[0] = p[1], p[3]
 
-    @debug_print
+    @debug_production
     def p_storage_class_specifier(self, p):
         '''storage_class_specifier : TYPEDEF
                                    | EXTERN
@@ -344,7 +326,7 @@ class C99Parser(object):
                                    | REGISTER '''
         p[0] = p[1]
 
-    @debug_print
+    @debug_production
     def p_type_specifier(self, p):
         '''type_specifier : VOID
                           | CHAR
@@ -363,7 +345,7 @@ class C99Parser(object):
                           | TYPEDEF_NAME '''
         p[0] = p[1]
 
-    @debug_print
+    @debug_production
     def p_struct_or_union_specifier(self, p):
         '''struct_or_union_specifier : struct_or_union '{' struct_declaration_list '}'
                                      | struct_or_union IDENTIFIER '{' struct_declaration_list '}'
@@ -379,13 +361,13 @@ class C99Parser(object):
         elif p[1] == 'union':
             pass
 
-    @debug_print
+    @debug_production
     def p_struct_or_union(self, p):
         '''struct_or_union : STRUCT
                            | UNION '''
         p[0] = p[1]
 
-    @debug_print
+    @debug_production
     def p_struct_declaration_list(self, p):
         '''struct_declaration_list : struct_declaration
                                    | struct_declaration_list struct_declaration '''
@@ -395,12 +377,12 @@ class C99Parser(object):
             p[1].append(p[2])
             p[0] = p[1]
 
-    @debug_print
+    @debug_production
     def p_struct_declaration(self, p):
         '''struct_declaration : specifier_qualifier_list struct_declarator_list ';' '''
         p[0] = ir.StructDeclaration(p[1], p[2])
 
-    @debug_print
+    @debug_production
     # TODO: Handle error whenever type is a typedef not yet declared. (Ambiguity with IDENTIFIER otherwise)
     def p_specifier_qualifier_list(self, p):
         '''specifier_qualifier_list : type_specifier
@@ -413,7 +395,7 @@ class C99Parser(object):
         else:
             p[0] = [p[1],]
 
-    @debug_print
+    @debug_production
     def p_struct_declarator_list(self, p):
         '''struct_declarator_list : struct_declarator
                                   | struct_declarator_list ',' struct_declarator'''
@@ -423,7 +405,7 @@ class C99Parser(object):
             p[1].append(p[3])
             p[0] = p[1]
 
-    @debug_print
+    @debug_production
     def p_struct_declarator(self, p):
         '''struct_declarator : declarator
                              | ':' constant_expression
@@ -437,7 +419,7 @@ class C99Parser(object):
         else:
             p[0] = [p[1], p[3],]
 
-    @debug_print
+    @debug_production
     def p_enum_specifier(self, p):
         '''enum_specifier : ENUM '{' enumerator_list '}'
                           | ENUM IDENTIFIER '{' enumerator_list '}'
@@ -448,7 +430,7 @@ class C99Parser(object):
         if len(p) == 5:
             p[0] = ir.Enumeration(enumerator_list = p[3])
 
-    @debug_print
+    @debug_production
     def p_enumerator_list(self, p):
         '''enumerator_list : enumerator
                            | enumerator_list ',' enumerator'''
@@ -458,7 +440,7 @@ class C99Parser(object):
             p[1].append(p[3])
             p[0] = p[1]
 
-    @debug_print
+    @debug_production
     def p_enumerator(self, p):
         '''enumerator : IDENTIFIER
                       | IDENTIFIER '=' constant_expression '''
@@ -467,19 +449,19 @@ class C99Parser(object):
         else:
             p[0] = p[1], p[3]
 
-    @debug_print
+    @debug_production
     def p_function_specifier(self, p):
         '''function_specifier : INLINE '''
         p[0] = p[1]
 
-    @debug_print
+    @debug_production
     def p_type_qualifier(self, p):
         '''type_qualifier : CONST
                           | RESTRICT
                           | VOLATILE '''
         p[0] = p[1]
 
-    @debug_print
+    @debug_production
     def p_declarator(self, p):
         '''declarator : direct_declarator
                       | pointer direct_declarator '''
@@ -490,7 +472,7 @@ class C99Parser(object):
             # TODO : Handle pointer case
             pass
 
-    @debug_print
+    @debug_production
     def p_direct_declarator(self, p):
         '''direct_declarator : IDENTIFIER
                              | '(' declarator ')'
@@ -520,7 +502,7 @@ class C99Parser(object):
             if p[2] == '[':
                 p[0] = f'''{p[1]}[{p[3]}]'''
 
-    @debug_print
+    @debug_production
     def p_pointer(self, p):
         '''pointer : '*'
                    | '*' type_qualifier_list
@@ -528,7 +510,7 @@ class C99Parser(object):
                    | '*' type_qualifier_list pointer '''
         pass
 
-    @debug_print
+    @debug_production
     def p_type_qualifier_list(self, p):
         '''type_qualifier_list : type_qualifier
                                | type_qualifier_list type_qualifier '''
@@ -538,13 +520,13 @@ class C99Parser(object):
             p[1].append(p[2])
             p[0] = p[1]
 
-    @debug_print
+    @debug_production
     def p_parameter_type_list(self, p):
         '''parameter_type_list : parameter_list
                                | parameter_list ',' ELLIPSIS'''
         pass
 
-    @debug_print
+    @debug_production
     def p_parameter_list(self, p):
         '''parameter_list : parameter_declaration
                           | parameter_list ',' parameter_declaration '''
@@ -554,14 +536,14 @@ class C99Parser(object):
             p[1].append(p[2])
             p[0] = p[1]
 
-    @debug_print
+    @debug_production
     def p_parameter_declaration(self, p):
         '''parameter_declaration : declaration_specifiers declarator
                                  | declaration_specifiers
                                  | declaration_specifiers abstract_declarator '''
         pass
 
-    @debug_print
+    @debug_production
     def p_identifier_list(self, p):
         '''identifier_list : IDENTIFIER
                            | identifier_list ',' IDENTIFIER '''
@@ -571,20 +553,20 @@ class C99Parser(object):
             p[1].append(p[2])
             p[0] = p[1]
 
-    @debug_print
+    @debug_production
     def p_type_name(self, p):
         '''type_name : specifier_qualifier_list
                      | specifier_qualifier_list abstract_declarator '''
         pass
 
-    @debug_print
+    @debug_production
     def p_abstract_declarator(self, p):
         '''abstract_declarator : pointer
                                | direct_abstract_declarator
                                | pointer direct_abstract_declarator '''
         pass
 
-    @debug_print
+    @debug_production
     def p_direct_abstract_declarator(self, p):
         '''direct_abstract_declarator : '(' abstract_declarator ')'
                                       | '[' ']'
@@ -607,14 +589,14 @@ class C99Parser(object):
                                       | direct_abstract_declarator '(' parameter_type_list ')' '''
         pass
 
-    @debug_print
+    @debug_production
     def p_initializer(self, p):
         '''initializer : assignment_expression
                        | '{' initializer_list '}'
                        | '{' initializer_list ',' '}' '''
         pass
 
-    @debug_print
+    @debug_production
     def p_initializer_list(self, p):
         '''initializer_list : initializer
                             | designation initializer
@@ -626,24 +608,24 @@ class C99Parser(object):
             p[1].append(p[2])
             p[0] = p[1]
 
-    @debug_print
+    @debug_production
     def p_designation(self, p):
         '''designation : designator_list '=' '''
         pass
 
-    @debug_print
+    @debug_production
     def p_designator_list(self, p):
         '''designator_list : designator
                            | designator_list designator '''
         pass
 
-    @debug_print
+    @debug_production
     def p_designator(self, p):
         '''designator : '[' constant_expression  ']'
                       | '.' IDENTIFIER '''
         pass
 
-    @debug_print
+    @debug_production
     def p_statement(self, p):
         '''statement : labeled_statement
                      | compound_statement
@@ -653,14 +635,14 @@ class C99Parser(object):
                      | jump_statement '''
         p[0] = p[1]
 
-    @debug_print
+    @debug_production
     def p_labeled_statement(self, p):
         '''labeled_statement : IDENTIFIER ':' statement
                              | CASE constant_expression ':' statement
                              | DEFAULT ':' statement '''
         pass
 
-    @debug_print
+    @debug_production
     def p_compound_statement(self, p):
         '''compound_statement : '{' '}'
                               | '{' block_item_list '}' '''
@@ -672,19 +654,19 @@ class C99Parser(object):
         # else:
         #     p[0] = [p[2], p[3]]
 
-    @debug_print
+    @debug_production
     def p_block_item_list(self, p):
         '''block_item_list : block_item
                            | block_item_list block_item '''
         pass
 
-    @debug_print
+    @debug_production
     def p_block_item(self, p):
         '''block_item : declaration
                       | statement '''
         pass
 
-    @debug_print
+    @debug_production
     def p_declaration_list(self, p):
         '''declaration_list : declaration
                             | declaration_list declaration '''
@@ -694,20 +676,20 @@ class C99Parser(object):
             p[1].append(p[2])
             p[0] = p[1]
 
-    @debug_print    
+    @debug_production    
     def p_expression_statement(self, p):
         '''expression_statement : ';'
                                 | expression ';' '''
         pass
 
-    @debug_print
+    @debug_production
     def p_selection_statement(self, p):
         '''selection_statement : IF '(' expression ')' statement
                                | IF '(' expression ')' statement ELSE statement
                                | SWITCH '(' expression ')' statement ''' 
         pass
     
-    @debug_print
+    @debug_production
     def p_iteration_statement(self, p):
         '''iteration_statement : WHILE '(' expression ')' statement
                                | DO statement WHILE '(' expression ')' ';'
@@ -715,7 +697,7 @@ class C99Parser(object):
                                | FOR '(' declaration expression_statement expression_statement ')' statement '''
         pass
 
-    @debug_print
+    @debug_production
     def p_jump_statement(self, p):
         '''jump_statement : GOTO IDENTIFIER ';'
                           | CONTINUE ';'
@@ -724,13 +706,13 @@ class C99Parser(object):
                           | RETURN expression ';' '''
         pass
 
-    @debug_print
+    @debug_production
     def p_external_declaration(self, p):
         '''external_declaration : function_definition
                                 | declaration '''
         p[0] = p[1]
 
-    @debug_print
+    @debug_production
     def p_function_definition(self, p):
         '''function_definition : declaration_specifiers declarator declaration_list compound_statement
                                 | declaration_specifiers declarator compound_statement'''

@@ -1,4 +1,6 @@
 from pathlib import Path
+from utils import debug_production
+
 import ply.lex as lex
 import ply.yacc as yacc
 
@@ -17,9 +19,22 @@ class C99PreProcessorLexer(object):
     # Keywords
     reserved = {
                     "define" : "DEFINE",
+                    "defined" : "DEFINED",
+                    "elif" : "ELIF",
+                    "else" : "ELSE",
+                    "endif" : "ENDIF",
+                    "error" : "ERROR",
+                    "if" : "IF",
+                    "ifdef" : "IFDEF",
+                    "ifndef" : "IFNDEF",
                     "include" : "INCLUDE",
+                    "line" : "LINE",
                     "pragma" : "PRAGMA",
                     "undef" : "UNDEF",
+                    "__DATE__" : "CURRENT_DATE",
+                    "__FILE__" : "FILENAME",
+                    "__LINE__" : "CURRENT_LINE",
+                    "__TIME__" : "TIME",
             }
 
     # This class attribute should be set because ply
@@ -31,6 +46,8 @@ class C99PreProcessorLexer(object):
                 "HEADER_NAME",
                 "IDENTIFIER",
                 "STRING_LITERAL",
+
+                "MACRO_NAME",
 
                 # Operators
                 "ELLIPSIS",
@@ -93,7 +110,7 @@ class C99PreProcessorLexer(object):
         self._symbol_table = {}
 
     # Define a rule so we can track line numbers
-    def t_newline(self, t):
+    def t_NEWLINE(self, t):
         r'\n+'
         t.lexer.lineno += len(t.value)
 
@@ -174,46 +191,79 @@ class C99PreProcessorParser(object):
         self._parser = yacc.yacc(module = self, debug = debug, **kwargs)
         self._debug  = debug
 
+    @debug_production
     def p_macro(self, p):
         '''
         macro : '#' directive
-                | '#' directive macro
+                | '#' directive macro 
         '''
         pass
 
+    @debug_production
     def p_directive(self, p):
         '''
-        directive :  define
-                   | include
-                   | pragma
+        directive :  define_directive
+                   | include_directive
+                   | pragma_directive
+        '''
+        pass
+    
+    @debug_production
+    def p_define_directive(self, p):
+        '''
+        define_directive :  DEFINE IDENTIFIER token_list
+                   | DEFINE '(' identifier_list ')' token_list
         '''
         pass
 
-    def p_define(self, p):
+    @debug_production
+    def p_include_directive(self, p):
         '''
-        define : DEFINE IDENTIFIER
-        '''
-        pass
-
-    def p_include(self, p):
-        '''
-        include : INCLUDE HEADER_NAME
+        include_directive : INCLUDE HEADER_NAME
         '''
         pass
 
-    def p_pragma(self, p):
+    @debug_production
+    def p_pragma_directive(self, p):
         '''
-        pragma : PRAGMA'''
+        pragma_directive : PRAGMA token_list
+        '''
         pass
+
+    @debug_production
+    def p_identifier_list(self, p):
+        '''
+        identifier_list : IDENTIFIER
+                        | identifier_list ',' IDENTIFIER
+        '''
+        pass
+
+    @debug_production
+    def p_token_list(self, p):
+        '''
+        token_list : token
+                    | token_list token
+        '''
+        if len(p) == 2:
+            p[0] = [p[1]]
+        else:
+            # TODO : Produce a string instead of a list would be easier for text replacement
+            p[1].append(p[2])
+            p[0] = p[1]
+
+    @debug_production
+    def p_token(self, p):
+        '''
+        token :     IDENTIFIER
+                |   CONSTANT
+        '''
+        p[0] = p[1]
 
     def p_error(self, p):
         if p:
-            print(f'''Error: {p}''')
-            # Just discard the token and tell the parser it's okay.
-            self._parser.errok()
+            print(p)
         else:
             print("Reach EOF")
-
 
     def parse(self, data):
         self._parser.parse(data)
@@ -224,14 +274,21 @@ class C99PreProcessor(object):
     The pre processor is in charge of macro expansion such as macro function, pragma, include or define.
     '''
     
-    def __init__(self, output_path):
-        self._stdlib_path = "./stdlib/"
+    def __init__(self, output_path, system_path = None):
         self._output_path = output_path
         self._parser = C99PreProcessorParser()
             
         self._headers_table = {}
 
-        self._link_header("stdlib/")
+        if not system_path:
+            self._system_path = [
+                                    "stdlib/",
+                                ]
+        else:
+            self._system_path = system_path
+
+        for path in self._system_path:
+            self._link_header(path)
 
     def _link_header(self, input_path):
         """
@@ -266,11 +323,21 @@ class C99PreProcessor(object):
         self._link_header(input_path)
         
         # First pass will parse every headers to build macro tables and token list.
-        for path in Path(input_path).rglob('*.h'):
+        for path in Path(input_path, encoding = 'utf-8').rglob('*.h'):
             with open(path, 'rt') as header:
                 self._parse(header)
 
 if __name__ == "__main__":
-    pre_processor = C99PreProcessor("output/")
+    # pre_processor = C99PreProcessor("output/")
 
-    pre_processor.process("examples/")
+    # pre_processor.process("examples/")    
+
+    pre_processor_parser = C99PreProcessorParser(debug = True)
+
+
+    data_example =  '''
+                    #define CONSTANT 40 2
+                    #include "fat32_constant.h"
+                    '''
+
+    pre_processor_parser.parse(data_example)
