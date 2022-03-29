@@ -30,11 +30,8 @@ class C99PreProcessorLexer(object):
                     "include" : "INCLUDE",
                     "line" : "LINE",
                     "pragma" : "PRAGMA",
+                    "_Pragma" : "_PRAGMA",
                     "undef" : "UNDEF",
-                    "__DATE__" : "CURRENT_DATE",
-                    "__FILE__" : "FILENAME",
-                    "__LINE__" : "CURRENT_LINE",
-                    "__TIME__" : "TIME",
             }
 
     # This class attribute should be set because ply
@@ -48,6 +45,7 @@ class C99PreProcessorLexer(object):
                 "STRING_LITERAL",
 
                 "MACRO_NAME",
+                "NEWLINE",
 
                 # Operators
                 "ELLIPSIS",
@@ -80,7 +78,7 @@ class C99PreProcessorLexer(object):
 
     # Skip whitespaces
     t_ignore = ' \t'
-    
+
     # Operators
     t_ELLIPSIS = r'\.\.\.'
     t_LEFT_ASSIGN = r'<<='
@@ -107,12 +105,18 @@ class C99PreProcessorLexer(object):
 
     def __init__(self, **kwargs):
         self._lexer        = lex.lex(module = self, **kwargs)
-        self._symbol_table = {}
+        self._symbol_table = {
+                                "__DATE__" : "CURRENT_DATE", # TODO : CALLBACK should be set instead
+                                "__FILE__" : "FILENAME", # TODO : CALLBACK should be set instead
+                                "__LINE__" : "CURRENT_LINE", # TODO : CALLBACK should be set instead
+                                "__TIME__" : "TIME", # TODO : CALLBACK should be set instead
+                            }
 
     # Define a rule so we can track line numbers
     def t_NEWLINE(self, t):
         r'\n+'
         t.lexer.lineno += len(t.value)
+        return t
 
     HEADER_NAME_RE = "|".join([
                                 f"""<[^<>]+>""",
@@ -128,12 +132,9 @@ class C99PreProcessorLexer(object):
 
         # Check first if identifier is a reserved word
         if t.value in self.reserved:
-            t.type = self.reserved[t.value] 
-        else:
-            if t.value not in self._symbol_table:
-                self._symbol_table[t.value] = {"type": "IDENTIFIER", "value": None}
+            t.type = self.reserved[t.value]
 
-            t.type = self._symbol_table[t.value]["type"]
+        #There's no type checking as we are only in translation phase 3 and not defining yet custom/user defined types.    
         return t
 
     def t_STRING_LITERAL(self, t):
@@ -141,13 +142,13 @@ class C99PreProcessorLexer(object):
         return t
 
     CONSTANT_RE = "|".join([
-                                f"""{DIGIT}+{E}{FLOAT_SUFFIX}?""",
-                                f"""{DIGIT}*\.{DIGIT}+({E})?{FLOAT_SUFFIX}?""",
-                                f"""{DIGIT}+\.{DIGIT}*({E})?{FLOAT_SUFFIX}?""",
-                                f"""0[xX]{LETTER_DIGIT}+{INT_SUFFIX}?""",
-                                f"""0{DIGIT}+{INT_SUFFIX}?""",
-                                f"""{DIGIT}+{INT_SUFFIX}?""",
-                                f"""L?'(\\.|[^\\'])+'""",
+                                fr"""{DIGIT}+{E}{FLOAT_SUFFIX}?""",
+                                fr"""{DIGIT}*\.{DIGIT}+({E})?{FLOAT_SUFFIX}?""",
+                                fr"""{DIGIT}+\.{DIGIT}*({E})?{FLOAT_SUFFIX}?""",
+                                fr"""0[xX]{LETTER_DIGIT}+{INT_SUFFIX}?""",
+                                fr"""0{DIGIT}+{INT_SUFFIX}?""",
+                                fr"""{DIGIT}+{INT_SUFFIX}?""",
+                                fr"""L?'(\\.|[^\\'])+'""",
                             ])
     
     @lex.TOKEN(CONSTANT_RE)
@@ -192,44 +193,312 @@ class C99PreProcessorParser(object):
         self._debug  = debug
 
     @debug_production
-    def p_macro(self, p):
+    def p_group(self, p):
         '''
-        macro : '#' directive
-                | '#' directive macro 
+        group : group_part
+              | group group_part
+        '''
+
+    @debug_production
+    def p_group_part(self, p):
+        '''
+        group_part : control_line
+                   | if_section
+                   | text_line
+                   | '#' conditionally_supported_directive
         '''
         pass
 
     @debug_production
-    def p_directive(self, p):
+    def p_control_line(self, p):
         '''
-        directive :  define_directive
-                   | include_directive
-                   | pragma_directive
+        control_line : '#' define_directive NEWLINE
+                     | '#' error_directive NEWLINE
+                     | '#' include_directive NEWLINE
+                     | '#' line_directive NEWLINE
+                     | '#' pragma_directive NEWLINE
+                     | '#' undef_directive NEWLINE
+                     | '#' NEWLINE
+        '''
+        pass
+
+    @debug_production
+    def p_if_section(self, p):
+        '''
+        if_section  : if_group endif_line
+                    | if_group elif_groups endif_line
+                    | if_group else_group endif_line
+                    | if_group elif_groups else_group endif_line
+        '''
+        pass
+
+    @debug_production
+    def p_if_group(self, p):
+        '''
+        if_group : '#' IF constant_expression NEWLINE
+                 | '#' IF constant_expression NEWLINE group
+                 | '#' IFDEF IDENTIFIER NEWLINE
+                 | '#' IFDEF IDENTIFIER NEWLINE group
+                 | '#' IFNDEF IDENTIFIER NEWLINE
+                 | '#' IFNDEF IDENTIFIER NEWLINE group
+        '''
+        pass
+
+    @debug_production
+    def p_elif_groups(self, p):
+        '''
+        elif_groups : elif_group
+                    | elif_groups elif_group
+        '''
+        pass
+
+    @debug_production
+    def p_elif_group(self, p):
+        '''
+        elif_group : '#' ELIF constant_expression NEWLINE
+                   | '#' ELIF constant_expression NEWLINE group
+        '''
+        pass
+
+    @debug_production
+    def p_else_group(self, p):
+        '''
+        else_group : '#' ELSE NEWLINE
+                   | '#' ELSE NEWLINE group
+        '''
+        pass
+
+    @debug_production
+    def p_endif_line(self, p):
+        '''
+        endif_line : '#' ENDIF NEWLINE
+        '''
+        pass
+
+    @debug_production
+    def p_define_directive(self, p):
+        '''
+        define_directive : DEFINE IDENTIFIER replacement_list
+                         | DEFINE '(' ')' replacement_list
+                         | DEFINE '(' identifier_list ')' replacement_list
+                         | DEFINE '(' ELLIPSIS ')' replacement_list
+                         | DEFINE '(' identifier_list ',' ELLIPSIS ')' replacement_list
         '''
         pass
     
     @debug_production
-    def p_define_directive(self, p):
+    def p_error_directive(self, p):
         '''
-        define_directive :  DEFINE IDENTIFIER token_list
-                   | DEFINE '(' identifier_list ')' token_list
+        error_directive : ERROR
+                        | ERROR token_list
         '''
         pass
 
     @debug_production
     def p_include_directive(self, p):
         '''
-        include_directive : INCLUDE HEADER_NAME
+        include_directive : INCLUDE token_list
+        '''
+        pass
+
+    @debug_production
+    def p_line_directive(self, p):
+        '''
+        line_directive : LINE token_list
         '''
         pass
 
     @debug_production
     def p_pragma_directive(self, p):
         '''
-        pragma_directive : PRAGMA token_list
+        pragma_directive : PRAGMA
+                         | PRAGMA token_list
+                         | _PRAGMA '(' STRING_LITERAL ')'
         '''
         pass
 
+    @debug_production
+    def p_undef_directive(self, p):
+        '''
+        undef_directive : UNDEF IDENTIFIER
+        '''
+        pass
+    
+    @debug_production
+    def p_primary_expression(self, p):
+        '''primary_expression : IDENTIFIER
+                              | CONSTANT
+                              | '(' constant_expression ')' '''
+        if len(p) == 3:
+            p[0] = p[2]
+        else:
+            p[0] = p[1]
+
+    @debug_production
+    def p_unary_expression(self, p):
+        '''unary_expression : primary_expression
+                            | unary_operator unary_expression
+                            | DEFINED '(' IDENTIFIER ')' '''
+        if len(p) == 2:
+            p[0] = p[1]
+        else:
+            pass
+
+    @debug_production
+    def p_unary_operator(self, p):
+        '''unary_operator : '&'
+                          | '*'  
+                          | '+'  
+                          | '-'  
+                          | '~'  
+                          | '!' '''
+        p[0] = p[1]
+
+    @debug_production
+    def p_multiplicative_expression(self, p):
+        '''multiplicative_expression : unary_expression
+                                     | multiplicative_expression '*' unary_expression
+                                     | multiplicative_expression '/' unary_expression
+                                     | multiplicative_expression '%' unary_expression '''
+        if len(p) == 2:
+            p[0] = p[1]
+        else:
+            if p[2] == '*':
+                p[0] = p[1] * p[3]
+            elif p[2] == '/':
+                p[0] = p[1] / p[3]
+            elif p[2] == '%':
+                p[0] = p[1] % p[3]
+
+    @debug_production
+    def p_additive_expression(self, p):
+        '''additive_expression : multiplicative_expression
+                               | additive_expression '+' multiplicative_expression
+                               | additive_expression '-' multiplicative_expression '''
+        if len(p) == 2:
+            p[0] = p[1]
+        else:
+            if p[2] == '+':
+                p[0] = p[1] + p[3]
+            elif p[2] == '-':
+                p[0] = p[1] - p[3]
+
+    @debug_production
+    def p_shift_expression(self, p):
+        '''shift_expression : additive_expression
+                            | shift_expression LEFT_OP additive_expression
+                            | shift_expression RIGHT_OP additive_expression '''
+        if len(p) == 2:
+            p[0] = p[1]
+        else:
+            if p[2] == '<<':
+                p[0] = p[1] << p[3]
+            elif p[2] == '>>':
+                p[0] = p[1] >> p[3]
+
+    @debug_production
+    def p_relational_expression(self, p):
+        '''relational_expression : shift_expression
+                                 | relational_expression '<' shift_expression
+                                 | relational_expression '>' shift_expression
+                                 | relational_expression LE_OP shift_expression
+                                 | relational_expression GE_OP shift_expression '''
+        if len(p) == 2:
+            p[0] = p[1]
+        else:
+            if p[2] == '<':
+                p[0] = p[1] < p[3]
+            elif p[2] == '>':
+                p[0] = p[1] > p[3]
+            elif p[2] == '<=':
+                p[0] = p[1] <= p[3]
+            elif p[2] == '>=':
+                p[0] = p[1] >= p[3]
+
+    @debug_production
+    def p_equality_expression(self, p):
+        '''equality_expression : relational_expression
+                               | equality_expression EQ_OP relational_expression
+                               | equality_expression NE_OP relational_expression '''
+        if len(p) == 2:
+            p[0] = p[1]
+        else:
+            if p[2] == '==':
+                p[0] = p[1] == p[3]
+            elif p[2] == '!=':
+                p[0] = p[1] != p[3]
+
+    @debug_production
+    def p_and_expression(self, p):
+        '''and_expression : equality_expression
+                          | and_expression '&' equality_expression '''
+        if len(p) == 2:
+            p[0] = p[1]
+        else:
+            p[0] = p[1] & p[3]
+
+    @debug_production
+    def p_exclusive_or_expression(self, p):
+        '''exclusive_or_expression : and_expression
+                                   | exclusive_or_expression '^' and_expression '''
+        if len(p) == 2:
+            p[0] = p[1]
+        else:
+            p[0] = p[1] ^ p[3]
+
+    @debug_production
+    def p_inclusive_or_expression(self, p):
+        '''inclusive_or_expression : exclusive_or_expression
+                                   | inclusive_or_expression '|' exclusive_or_expression '''
+        if len(p) == 2:
+            p[0] = p[1]
+        else:
+            p[0] = p[1] | p[3]
+
+    @debug_production
+    def p_logical_and_expression(self, p):
+        '''logical_and_expression : inclusive_or_expression
+                                  | logical_and_expression AND_OP inclusive_or_expression '''
+        if len(p) == 2:
+            p[0] = p[1]
+        else:
+            p[0] = p[1] and p[3]
+
+    @debug_production
+    def p_logical_or_expression(self, p):
+        '''
+        logical_or_expression : logical_and_expression
+                              | logical_or_expression OR_OP logical_and_expression '''
+        pass
+
+    @debug_production
+    def p_conditional_expression(self, p ):
+        '''
+        conditional_expression : logical_or_expression
+                               | logical_or_expression '?' conditional_expression ':' conditional_expression '''
+        pass
+
+    @debug_production
+    def p_constant_expression(self, p):
+        '''
+        constant_expression : conditional_expression
+        '''
+        pass
+
+    @debug_production
+    def p_text_line(self, p):
+        '''
+        text_line : NEWLINE
+                  | token_list NEWLINE
+        '''
+        pass
+
+    def p_conditionally_supported_directive(self, p):
+        '''
+        conditionally_supported_directive : token_list NEWLINE
+        '''
+        pass
+    
     @debug_production
     def p_identifier_list(self, p):
         '''
@@ -239,10 +508,18 @@ class C99PreProcessorParser(object):
         pass
 
     @debug_production
+    def p_replacement_list(self, p):
+        '''
+        replacement_list : 
+                         | token_list
+        '''
+        pass
+
+    @debug_production
     def p_token_list(self, p):
         '''
         token_list : token
-                    | token_list token
+                   | token_list token
         '''
         if len(p) == 2:
             p[0] = [p[1]]
@@ -251,12 +528,67 @@ class C99PreProcessorParser(object):
             p[1].append(p[2])
             p[0] = p[1]
 
-    @debug_production
     def p_token(self, p):
         '''
         token :     IDENTIFIER
+                |   HEADER_NAME
                 |   CONSTANT
+                |   STRING_LITERAL
+                |   operator_punc
         '''
+        p[0] = p[1]
+
+    def p_operator_punc(self, p):
+        '''operator_punc :     '='
+                               | AND_OP
+                               | MUL_ASSIGN 
+                               | DIV_ASSIGN
+                               | MOD_ASSIGN 
+                               | ADD_ASSIGN 
+                               | SUB_ASSIGN 
+                               | LEFT_ASSIGN 
+                               | RIGHT_ASSIGN 
+                               | AND_ASSIGN 
+                               | XOR_ASSIGN 
+                               | OR_ASSIGN 
+                               | DEC_OP
+                               | ELLIPSIS
+                               | EQ_OP
+                               | GE_OP
+                               | INC_OP
+                               | LEFT_OP
+                               | LE_OP
+                               | NE_OP
+                               | PTR_OP
+                               | OR_OP
+                               | RIGHT_OP
+                               | ';'
+                               | '{'
+                               | '}'
+                               | ',' 
+                               | ':'
+                               | '('
+                               | ')'
+                               | '['
+                               | ']'
+                               | '.'
+                               | '&'
+                               | '!'
+                               | '~'
+                               | '-'
+                               | '+'
+                               | '*'
+                               | '/'
+                               | '%'
+                               | '<'
+                               | '>'
+                               | '^'
+                               | '|'
+                               | '?'
+                               | '"'
+                               | '@'
+                               | '#'
+                               '''
         p[0] = p[1]
 
     def p_error(self, p):
@@ -335,9 +667,13 @@ if __name__ == "__main__":
     pre_processor_parser = C99PreProcessorParser(debug = True)
 
 
-    data_example =  '''
-                    #define CONSTANT 40 2
-                    #include "fat32_constant.h"
-                    '''
+    data_example = '''
+#define DLEVEL 1
+#if DLEVEL == 1
+    #define SIGNAL 1
+#else
+    #define SIGNAL 2
+#endif
+'''
 
     pre_processor_parser.parse(data_example)
