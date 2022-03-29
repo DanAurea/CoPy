@@ -18,20 +18,20 @@ class C99PreProcessorLexer(object):
 
     # Keywords
     reserved = {
-                    "define" : "DEFINE",
+                    "#define" : "DEFINE",
                     "defined" : "DEFINED",
-                    "elif" : "ELIF",
-                    "else" : "ELSE",
-                    "endif" : "ENDIF",
-                    "error" : "ERROR",
-                    "if" : "IF",
-                    "ifdef" : "IFDEF",
-                    "ifndef" : "IFNDEF",
-                    "include" : "INCLUDE",
-                    "line" : "LINE",
-                    "pragma" : "PRAGMA",
+                    "#elif" : "ELIF",
+                    "#else" : "ELSE",
+                    "#endif" : "ENDIF",
+                    "#error" : "ERROR",
+                    "#if" : "IF",
+                    "#ifdef" : "IFDEF",
+                    "#ifndef" : "IFNDEF",
+                    "#include" : "INCLUDE",
+                    "#line" : "LINE",
+                    "#pragma" : "PRAGMA",
                     "_Pragma" : "_PRAGMA",
-                    "undef" : "UNDEF",
+                    "#undef" : "UNDEF",
             }
 
     # This class attribute should be set because ply
@@ -41,6 +41,7 @@ class C99PreProcessorLexer(object):
             [
                 "CONSTANT",
                 "HEADER_NAME",
+                "DIRECTIVE",
                 "IDENTIFIER",
                 "STRING_LITERAL",
 
@@ -127,14 +128,17 @@ class C99PreProcessorLexer(object):
     def t_HEADER_NAME(self, t):
         return t
 
-    def t_IDENTIFIER(self, t):
-        r'[a-zA-Z_][a-zA-Z_0-9]*'
+    def t_DIRECTIVE(self, t):
+        r'\#[a-zA-Z_][a-zA-Z_0-9]*'
 
-        # Check first if identifier is a reserved word
+        # Check first if it's a standard C directive
         if t.value in self.reserved:
             t.type = self.reserved[t.value]
 
-        #There's no type checking as we are only in translation phase 3 and not defining yet custom/user defined types.    
+        return t
+
+    def t_IDENTIFIER(self, t):
+        r'[a-zA-Z_][a-zA-Z_0-9]*'
         return t
 
     def t_STRING_LITERAL(self, t):
@@ -193,6 +197,14 @@ class C99PreProcessorParser(object):
         self._debug  = debug
 
     @debug_production
+    def p_preprocessing_file(self, p):
+        '''
+        preprocessing_file : 
+                           | group
+        '''
+        pass
+
+    @debug_production
     def p_group(self, p):
         '''
         group : group_part
@@ -205,20 +217,19 @@ class C99PreProcessorParser(object):
         group_part : control_line
                    | if_section
                    | text_line
-                   | '#' conditionally_supported_directive
+                   | conditionally_supported_directive
         '''
         pass
 
     @debug_production
     def p_control_line(self, p):
         '''
-        control_line : '#' define_directive NEWLINE
-                     | '#' error_directive NEWLINE
-                     | '#' include_directive NEWLINE
-                     | '#' line_directive NEWLINE
-                     | '#' pragma_directive NEWLINE
-                     | '#' undef_directive NEWLINE
-                     | '#' NEWLINE
+        control_line : define_directive NEWLINE
+                     | error_directive NEWLINE
+                     | include_directive NEWLINE
+                     | line_directive NEWLINE
+                     | pragma_directive NEWLINE
+                     | undef_directive NEWLINE
         '''
         pass
 
@@ -235,12 +246,12 @@ class C99PreProcessorParser(object):
     @debug_production
     def p_if_group(self, p):
         '''
-        if_group : '#' IF constant_expression NEWLINE
-                 | '#' IF constant_expression NEWLINE group
-                 | '#' IFDEF IDENTIFIER NEWLINE
-                 | '#' IFDEF IDENTIFIER NEWLINE group
-                 | '#' IFNDEF IDENTIFIER NEWLINE
-                 | '#' IFNDEF IDENTIFIER NEWLINE group
+        if_group : IF constant_expression NEWLINE
+                 | IF constant_expression NEWLINE group
+                 | IFDEF IDENTIFIER NEWLINE
+                 | IFDEF IDENTIFIER NEWLINE group
+                 | IFNDEF IDENTIFIER NEWLINE
+                 | IFNDEF IDENTIFIER NEWLINE group
         '''
         pass
 
@@ -255,23 +266,23 @@ class C99PreProcessorParser(object):
     @debug_production
     def p_elif_group(self, p):
         '''
-        elif_group : '#' ELIF constant_expression NEWLINE
-                   | '#' ELIF constant_expression NEWLINE group
+        elif_group : ELIF constant_expression NEWLINE
+                   | ELIF constant_expression NEWLINE group
         '''
         pass
 
     @debug_production
     def p_else_group(self, p):
         '''
-        else_group : '#' ELSE NEWLINE
-                   | '#' ELSE NEWLINE group
+        else_group : ELSE NEWLINE
+                   | ELSE NEWLINE group
         '''
         pass
 
     @debug_production
     def p_endif_line(self, p):
         '''
-        endif_line : '#' ENDIF NEWLINE
+        endif_line : ENDIF NEWLINE
         '''
         pass
 
@@ -285,7 +296,7 @@ class C99PreProcessorParser(object):
                          | DEFINE '(' identifier_list ',' ELLIPSIS ')' replacement_list
         '''
         pass
-    
+
     @debug_production
     def p_error_directive(self, p):
         '''
@@ -495,7 +506,7 @@ class C99PreProcessorParser(object):
 
     def p_conditionally_supported_directive(self, p):
         '''
-        conditionally_supported_directive : token_list NEWLINE
+        conditionally_supported_directive : DIRECTIVE NEWLINE
         '''
         pass
     
@@ -611,6 +622,15 @@ class C99PreProcessor(object):
         self._parser = C99PreProcessorParser()
             
         self._headers_table = {}
+        
+        self._di_tri_graph_replace_table =  {
+                                                # Digraph
+                                                '<:' : '[', '>:' : ']', '<%' : '{', '>%' : '}', '%:' : '#',  
+                                                # Trigraph
+                                                '??=' : '#', '??/' : '\\', '??\'' : '^', '??(' : '[',
+                                                '??)' : ']', '??!' : '|', '??<' : '{', '??>' : '}',
+                                                '??-' : '~',
+                                            }
 
         if not system_path:
             self._system_path = [
@@ -664,16 +684,21 @@ if __name__ == "__main__":
 
     # pre_processor.process("examples/")    
 
-    pre_processor_parser = C99PreProcessorParser(debug = True)
-
+    pre_processor_parser = C99PreProcessorParser(debug =  True)
 
     data_example = '''
-#define DLEVEL 1
-#if DLEVEL == 1
+    #define DLEVEL
+    #ifdef DLEVEL
     #define SIGNAL 1
-#else
+    #else
     #define SIGNAL 2
-#endif
-'''
+    #endif
+
+    int main()
+    {
+        static uint8_t i = SIGNAL;
+        printf("i = %d\n", i);
+    }
+    '''
 
     pre_processor_parser.parse(data_example)
