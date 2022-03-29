@@ -74,8 +74,8 @@ class C99PreProcessorLexer(object):
             ]
 
     literals = [ ';', '{', '}', ',', ':', '=', '(', ')', '[', ']', '.', '&', '!',
-                 '~', '-', '+', '*', '/', '%', '<', '>', '^', '|', '?', '"', '\\',
-                 '@', '#']
+                 '~', '-', '+', '*', '/', '%', '<', '>', '^', '|', '?', '"', '@', 
+                 '#']
 
     # Skip whitespaces
     t_ignore = ' \t'
@@ -506,7 +506,7 @@ class C99PreProcessorParser(object):
 
     def p_conditionally_supported_directive(self, p):
         '''
-        conditionally_supported_directive : DIRECTIVE NEWLINE
+        conditionally_supported_directive : DIRECTIVE token_list NEWLINE
         '''
         pass
     
@@ -617,9 +617,9 @@ class C99PreProcessor(object):
     The pre processor is in charge of macro expansion such as macro function, pragma, include or define.
     '''
     
-    def __init__(self, output_path, system_path = None):
+    def __init__(self, output_path, system_path = None, **kwargs):
         self._output_path = output_path
-        self._parser = C99PreProcessorParser()
+        self._parser = C99PreProcessorParser(**kwargs)
             
         self._headers_table = {}
         
@@ -649,18 +649,47 @@ class C99PreProcessor(object):
         for path in Path(input_path).rglob('*.h'):
             self._headers_table[path.name] = path
 
-    def _parse(self, header):
+    def _replace_di_trigraph(self, file_content):
         """
-        Parse the data
+        Replace all digraphs and trigraphs to their corresponding single character.
         
-        :param      data:  The data
-        :type       data:  { type_description }
+        :param      file_content:    The header/source file content
+        :type       file_content:    str
+        """
+        for di_trigraph, replacing_char in self._di_tri_graph_replace_table.items():
+            file_content = file_content.replace(di_trigraph, replacing_char)
+
+        return file_content
+
+    def _join_backslash(self, file_content):
+        """
+        Replace all digraphs and trigraphs to their corresponding single character.
+        
+        :param      file_content:    The header/source file content
+        :type       file_content:    str
+        """
+        file_content = file_content.replace('\\\n', '')
+
+        return file_content
+
+    def _parse(self, file_content):
+        """
+        Parse the file content using C 99 standard.
+        
+        :param      data:  The header/source file content
+        :type       data:  str
         """
 
         # Read the content of the header and parse it in purpose to
         # construct the macro table and a token list.
-        data = header.read()
-        self._parser.parse(data)
+        self._parser.parse(file_content)
+
+    def _execute_directives(self):
+        """
+        Execute all directives found during translation phase 3 (parsing)
+        and remove all of them from the final output.
+        """
+        pass
 
     def process(self, input_path):
         """
@@ -675,30 +704,38 @@ class C99PreProcessor(object):
         self._link_header(input_path)
         
         # First pass will parse every headers to build macro tables and token list.
-        for path in Path(input_path, encoding = 'utf-8').rglob('*.h'):
+        for path in Path(input_path, encoding = 'utf-8').rglob('*.[hc]'):
             with open(path, 'rt') as header:
-                self._parse(header)
+                file_content = header.read()
+                # Translation phase 1
+                file_content = self._replace_di_trigraph(file_content)
+                # Translation phase 2
+                file_content = self._join_backslash(file_content)
+                # Translation phase 3
+                self._parse(file_content)
+                # Translation phase 4
+                self._execute_directives()
 
 if __name__ == "__main__":
-    # pre_processor = C99PreProcessor("output/")
+    pre_processor = C99PreProcessor("output/", debug = True)
 
-    # pre_processor.process("examples/")    
+    pre_processor.process("examples/digraph_trigraph")    
 
-    pre_processor_parser = C99PreProcessorParser(debug =  True)
+    # pre_processor_parser = C99PreProcessorParser(debug =  True)
 
-    data_example = '''
-    #define DLEVEL
-    #ifdef DLEVEL
-    #define SIGNAL 1
-    #else
-    #define SIGNAL 2
-    #endif
+    # data_example = '''
+    # %:define DLEVEL
+    # #ifdef DLEVEL
+    # ??=define SIGNAL 1
+    # #else
+    # #define SIGNAL 2
+    # #endif
 
-    int main()
-    {
-        static uint8_t i = SIGNAL;
-        printf("i = %d\n", i);
-    }
-    '''
+    # int main()
+    # {
+    #     static uint8_t i = SIGNAL;
+    #     printf("i = %d\n", i);
+    # }
+    # '''
 
-    pre_processor_parser.parse(data_example)
+    # pre_processor_parser.parse(data_example)
