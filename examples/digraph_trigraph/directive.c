@@ -4,7 +4,7 @@
 #else
 #define \
 SIGNAL \
-2
+2 // splitted macro definition
 #endif
 
 int main()

@@ -1,8 +1,11 @@
 from pathlib import Path
 from utils import debug_production
 
+import intermediate_representation as ir
 import ply.lex as lex
 import ply.yacc as yacc
+import re
+import time
 
 LETTER = r"[a-zA-Z]"
 DIGIT = r"[0-9]"
@@ -10,6 +13,8 @@ LETTER_DIGIT = r"[a-zA-Z-0-9]"
 E = f"""[Ee][+-]?{DIGIT}+"""
 FLOAT_SUFFIX = r"[fF]"
 INT_SUFFIX = r"[uU]"
+
+COMMENT_RE = re.compile(r'\/\*[\s\S]*?\*\/+|//.*')
 
 class C99PreProcessorLexer(object):
     """
@@ -45,7 +50,6 @@ class C99PreProcessorLexer(object):
                 "IDENTIFIER",
                 "STRING_LITERAL",
 
-                "MACRO_NAME",
                 "NEWLINE",
 
                 # Operators
@@ -70,7 +74,9 @@ class C99PreProcessorLexer(object):
                 "LE_OP",
                 "GE_OP",
                 "EQ_OP",
-                "NE_OP"
+                "NE_OP",
+                "HASH_HASH",
+                "LPAREN",
             ]
 
     literals = [ ';', '{', '}', ',', ':', '=', '(', ')', '[', ']', '.', '&', '!',
@@ -103,20 +109,19 @@ class C99PreProcessorLexer(object):
     t_GE_OP = r'>='
     t_EQ_OP = r'=='
     t_NE_OP = r'!='
+    t_HASH_HASH = r'\#\#'
 
     def __init__(self, **kwargs):
         self._lexer        = lex.lex(module = self, **kwargs)
-        self._symbol_table = {
-                                "__DATE__" : "CURRENT_DATE", # TODO : CALLBACK should be set instead
-                                "__FILE__" : "FILENAME", # TODO : CALLBACK should be set instead
-                                "__LINE__" : "CURRENT_LINE", # TODO : CALLBACK should be set instead
-                                "__TIME__" : "TIME", # TODO : CALLBACK should be set instead
-                            }
+        self.lineno        = 1
 
     # Define a rule so we can track line numbers
     def t_NEWLINE(self, t):
         r'\n+'
         t.lexer.lineno += len(t.value)
+        
+        self.lineno = t.lexer.lineno
+        
         return t
 
     HEADER_NAME_RE = "|".join([
@@ -163,6 +168,10 @@ class C99PreProcessorLexer(object):
         # post process with intermediate code generation.
         return t
 
+    def t_LPAREN(self, t):
+        r'(?<!\s)\('
+        return t
+
     # Error handling when an incorrect character is
     # being processed by the lexer.
     def t_error(self, t):
@@ -190,11 +199,44 @@ class C99PreProcessorLexer(object):
 class C99PreProcessorParser(object):
 
     def __init__(self, debug = False, **kwargs):
+        self._current_file = ""
+        
         self._lexer = C99PreProcessorLexer()
-
         self.tokens  = self._lexer.tokens
-        self._parser = yacc.yacc(module = self, debug = debug, **kwargs)
+
+        self.macro = {} 
+
+        self.define_macro("__DATE__", time.strftime, arg_list = ["%b %d %Y", time.localtime])
+        self.define_macro("__FILE__", self._current_file)
+        self.define_macro("__LINE__", self._lexer.lineno)
+        self.define_macro("__TIME__", time.strftime, arg_list = ["%H:%M:%S", time.localtime])
+
+        self._parser = yacc.yacc(module = self, debug = debug, start = "preprocessing_file", **kwargs)
         self._debug  = debug
+
+    def define_macro(self, name, replacement, arg_list = None, variadic = False):
+        """
+        Define a new Macro using intermediate representation.
+        
+        :param      name:        The macro name
+        :type       name:        str
+        :param      replacement:  The replacement list
+        :type       replacement:  object
+        :param      arg_list:          The argument list
+        :type       arg_list:          list or None if no arg list
+        :param      variadic:          Variable number of arguments
+        :type       variadic:          bool
+        """
+        self.macro[name] = ir.Macro(name, replacement, arg_list, variadic) 
+
+    def undef_macro(self, name):
+        """
+        Undefine a macro.
+        
+        :param      name:  The name
+        :type       name:  str
+        """
+        return self.macro.pop(name, None)
 
     @debug_production
     def p_preprocessing_file(self, p):
@@ -202,7 +244,9 @@ class C99PreProcessorParser(object):
         preprocessing_file : 
                            | group
         '''
-        pass
+        print("preproc_file")
+        if len(p) == 2:
+            p[0] = p[1]
 
     @debug_production
     def p_group(self, p):
@@ -210,6 +254,11 @@ class C99PreProcessorParser(object):
         group : group_part
               | group group_part
         '''
+        if len(p) == 2:
+            p[0] = [p[1]]
+        else:
+            p[1].append(p[2])
+            p[0] = p[1]
 
     @debug_production
     def p_group_part(self, p):
@@ -219,7 +268,7 @@ class C99PreProcessorParser(object):
                    | text_line
                    | conditionally_supported_directive
         '''
-        pass
+        p[0] = p[1]
 
     @debug_production
     def p_control_line(self, p):
@@ -231,7 +280,7 @@ class C99PreProcessorParser(object):
                      | pragma_directive NEWLINE
                      | undef_directive NEWLINE
         '''
-        pass
+        p[0] = p[1]
 
     @debug_production
     def p_if_section(self, p):
@@ -290,12 +339,36 @@ class C99PreProcessorParser(object):
     def p_define_directive(self, p):
         '''
         define_directive : DEFINE IDENTIFIER replacement_list
-                         | DEFINE '(' ')' replacement_list
-                         | DEFINE '(' identifier_list ')' replacement_list
-                         | DEFINE '(' ELLIPSIS ')' replacement_list
-                         | DEFINE '(' identifier_list ',' ELLIPSIS ')' replacement_list
         '''
-        pass
+        p[0] = ir.Macro(p[2], replacement = p[3])
+
+    @debug_production
+    def p_define_directive_2(self, p):
+        '''
+        define_directive : DEFINE IDENTIFIER LPAREN ')' replacement_list
+        '''
+        p[0] = ir.Macro(p[2], replacement = p[3])
+
+    @debug_production
+    def p_define_directive_3(self, p):
+        '''
+        define_directive : DEFINE IDENTIFIER LPAREN identifier_list ')' replacement_list
+        '''
+        p[0] = ir.Macro(p[2], replacement = p[6], arg_list = p[4])
+
+    @debug_production
+    def p_define_directive_4(self, p):
+        '''
+        define_directive : DEFINE IDENTIFIER LPAREN ELLIPSIS ')' replacement_list
+        '''
+        p[0] = ir.Macro(p[2], replacement = p[6], variadic = True)
+
+    @debug_production
+    def p_define_directive_5(self, p):
+        '''
+        define_directive : DEFINE IDENTIFIER LPAREN identifier_list ',' ELLIPSIS ')' replacement_list
+        '''
+        p[0] = ir.Macro(p[2], replacement = p[8], arg_list = p[4], variadic = True)
 
     @debug_production
     def p_error_directive(self, p):
@@ -303,7 +376,10 @@ class C99PreProcessorParser(object):
         error_directive : ERROR
                         | ERROR token_list
         '''
-        pass
+        if len(p) == 2:
+            raise Exception()
+        elif len(p) == 3:
+            raise Exception(p[2])
 
     @debug_production
     def p_include_directive(self, p):
@@ -333,7 +409,7 @@ class C99PreProcessorParser(object):
         '''
         undef_directive : UNDEF IDENTIFIER
         '''
-        pass
+        p[0] = self.undef_macro(p[2])
     
     @debug_production
     def p_primary_expression(self, p):
@@ -352,8 +428,10 @@ class C99PreProcessorParser(object):
                             | DEFINED '(' IDENTIFIER ')' '''
         if len(p) == 2:
             p[0] = p[1]
+        elif len(p) == 3:
+            p[0] = p[1], p[2]
         else:
-            pass
+            p[0] = True if p[3] in self.macro else False
 
     @debug_production
     def p_unary_operator(self, p):
@@ -480,21 +558,27 @@ class C99PreProcessorParser(object):
         '''
         logical_or_expression : logical_and_expression
                               | logical_or_expression OR_OP logical_and_expression '''
-        pass
+        if len(p) == 2:
+            p[0] = p[1]
+        else:
+            p[0] = p[1] or p[2]
 
     @debug_production
     def p_conditional_expression(self, p ):
         '''
         conditional_expression : logical_or_expression
                                | logical_or_expression '?' conditional_expression ':' conditional_expression '''
-        pass
+        if len(p) == 2:
+            p[0] = p[1]
+        else:
+            p[0] = p[1] if p[2] else p[3] 
 
     @debug_production
     def p_constant_expression(self, p):
         '''
         constant_expression : conditional_expression
         '''
-        pass
+        p[0] = p[1]
 
     @debug_production
     def p_text_line(self, p):
@@ -502,7 +586,7 @@ class C99PreProcessorParser(object):
         text_line : NEWLINE
                   | token_list NEWLINE
         '''
-        pass
+        p[0] = p[1:]
 
     def p_conditionally_supported_directive(self, p):
         '''
@@ -516,7 +600,11 @@ class C99PreProcessorParser(object):
         identifier_list : IDENTIFIER
                         | identifier_list ',' IDENTIFIER
         '''
-        pass
+        if len(p) == 2:
+            p[0] = p[1]
+        else:
+            p[1].append(p[2])
+            p[0] = p[1]
 
     @debug_production
     def p_replacement_list(self, p):
@@ -524,7 +612,8 @@ class C99PreProcessorParser(object):
         replacement_list : 
                          | token_list
         '''
-        pass
+        if len(p) == 2:
+            p[0] = p[1]
 
     @debug_production
     def p_token_list(self, p):
@@ -533,11 +622,9 @@ class C99PreProcessorParser(object):
                    | token_list token
         '''
         if len(p) == 2:
-            p[0] = [p[1]]
-        else:
-            # TODO : Produce a string instead of a list would be easier for text replacement
-            p[1].append(p[2])
             p[0] = p[1]
+        else:
+            p[0] = " ".join(p[1:])
 
     def p_token(self, p):
         '''
@@ -570,6 +657,7 @@ class C99PreProcessorParser(object):
                                | LEFT_OP
                                | LE_OP
                                | NE_OP
+                               | HASH_HASH
                                | PTR_OP
                                | OR_OP
                                | RIGHT_OP
@@ -617,7 +705,7 @@ class C99PreProcessor(object):
     The pre processor is in charge of macro expansion such as macro function, pragma, include or define.
     '''
     
-    def __init__(self, output_path, system_path = None, **kwargs):
+    def __init__(self, output_path, system_path = [], keep_comment = True, **kwargs):
         self._output_path = output_path
         self._parser = C99PreProcessorParser(**kwargs)
             
@@ -633,11 +721,11 @@ class C99PreProcessor(object):
                                             }
 
         if not system_path:
-            self._system_path = [
-                                    "stdlib/",
-                                ]
+            self._system_path = ["stdlib/",]
         else:
             self._system_path = system_path
+
+        self._keep_comment = keep_comment
 
         for path in self._system_path:
             self._link_header(path)
@@ -668,9 +756,16 @@ class C99PreProcessor(object):
         :param      file_content:    The header/source file content
         :type       file_content:    str
         """
-        file_content = file_content.replace('\\\n', '')
+        return file_content.replace('\\\n', '')
 
-        return file_content
+    def _strip_comment(self, file_content):
+        """
+        Strip all comments from the file content.
+        
+        :param      file_content:  The header/source file content
+        :type       file_content:  str
+        """
+        return re.sub(COMMENT_RE, ' ', file_content)
 
     def _parse(self, file_content):
         """
@@ -679,7 +774,6 @@ class C99PreProcessor(object):
         :param      data:  The header/source file content
         :type       data:  str
         """
-
         # Read the content of the header and parse it in purpose to
         # construct the macro table and a token list.
         self._parser.parse(file_content)
@@ -706,20 +800,28 @@ class C99PreProcessor(object):
         # First pass will parse every headers to build macro tables and token list.
         for path in Path(input_path, encoding = 'utf-8').rglob('*.[hc]'):
             with open(path, 'rt') as header:
+                self._current_file = path.name
                 file_content = header.read()
+                
                 # Translation phase 1
                 file_content = self._replace_di_trigraph(file_content)
+                
                 # Translation phase 2
                 file_content = self._join_backslash(file_content)
+                
                 # Translation phase 3
+                if not self._keep_comment:
+                    file_content = self._strip_comment(file_content)
+                
                 self._parse(file_content)
+
                 # Translation phase 4
                 self._execute_directives()
 
 if __name__ == "__main__":
     pre_processor = C99PreProcessor("output/", debug = True)
 
-    pre_processor.process("examples/digraph_trigraph")    
+    pre_processor.process("examples/digraph_trigraph")
 
     # pre_processor_parser = C99PreProcessorParser(debug =  True)
 
