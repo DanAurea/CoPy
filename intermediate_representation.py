@@ -69,7 +69,36 @@ class Function(object):
 class Macro(object):
 
     def __init__(self, name, replacement = None, arg_list = None, variadic = False):
-        self.name        = name
-        self.replacement = replacement
-        self.arg_list    = arg_list
-        self.variadic    = variadic
+        self.name              = name
+        self.replacement       = replacement
+        self.arg_list          = arg_list
+        self.variadic          = variadic
+        self.has_been_expanded = False 
+
+    def expand(self, arg_list = None):
+        """
+        Expand a macro. 
+
+        :param      arg_list:  The argument list
+        :type       arg_list:  { type_description }
+        """
+        replacement = self.replacement
+
+        if arg_list:
+            if not self.variadic and len(arg_list) > self.arg_list:
+                raise Exception("Number of arguments exceed expected list length.")
+
+            for label, arg in zip(self.arg_list, arg_list): 
+                replacement.replace(label, arg)
+
+        self.has_been_expanded = True
+
+        return replacement
+
+    def __repr__(self):
+        s = f'''
+                Macro name: {self.name}
+                Replacement text: {self.replacement}
+                Argument list : {self.arg_list}
+                Variadic : {self.variadic}'''
+        return s
