@@ -141,7 +141,7 @@ class C99PreProcessorLexer(object):
         if t.value in self.reserved:
             t.type = self.reserved[t.value]
             
-            if t.type == "IF":
+            if t.type == "IF" or t.type == 'IFDEF' or t.type == 'IFNDEF':
                 self.nested_if += 1
             elif t.type == "ENDIF":
                 self.nested_if -= 1
@@ -323,9 +323,9 @@ class C99PreProcessorParser(object):
                            | group
         '''
         if len(p) == 2:
-            # TODO: Should write to output path only if user request it explicitly
-            self.write(p)
             p[0] = p[1]
+        else:
+            p[0] = ''
 
     @debug_production
     def p_group(self, p):
@@ -334,10 +334,9 @@ class C99PreProcessorParser(object):
               | group group_part
         '''
         if len(p) == 2:
-            p[0] = [p[1]]
-        else:
-            p[1].append(p[2])
             p[0] = p[1]
+        else:
+            p[0] = f'{p[1]} {p[2]}'
 
     @debug_production
     def p_group_part(self, p):
@@ -359,7 +358,7 @@ class C99PreProcessorParser(object):
                      | pragma_directive NEWLINE
                      | undef_directive NEWLINE
         '''
-        p[0] = p[1]
+        p[0] = f'{p[1]}\n'
 
     @debug_production
     def p_if_section(self, p):
@@ -368,13 +367,13 @@ class C99PreProcessorParser(object):
         '''
         if_block = '\n'
 
-        if p[0][0]:
-            if_block = p[0][1]
+        if p[1][0]:
+            if_block = p[1][1]
         
         # Only rescan if we aren't in another if block which might evaluate to False, otherwise useless processing could happens.
         if not self._lexer.nested_if:
-            # TODO: Rescan if_block in purpose to preprocess remaining directives
-            pass
+            lexer = self._lexer._lexer.clone()
+            if_block = self._parser.parse(if_block, lexer = lexer)
 
         p[0] = if_block
 
@@ -385,18 +384,18 @@ class C99PreProcessorParser(object):
         '''
         if_block = '\n'
 
-        if p[0][0]:
-            if_block = p[0][1]
+        if p[1][0]:
+            if_block = p[1][1]
         else:
-            for elif_group in p[1]:
+            for elif_group in p[2]:
                 if elif_group[0]:
                     if_block = elif_group[1]
                     break
 
         # Only rescan if we aren't in another if block which might evaluate to False, otherwise useless processing could happens.
         if not self._lexer.nested_if:
-            # TODO: Rescan if_block in purpose to preprocess remaining directives
-            pass
+            lexer = self._lexer._lexer.clone()
+            if_block = self._parser.parse(if_block, lexer = lexer)
 
         p[0] = if_block
 
@@ -413,10 +412,10 @@ class C99PreProcessorParser(object):
             if_block = p[2]
 
         # Only rescan if we aren't in another if block which might evaluate to False, otherwise useless processing could happens.
-        if not self._lexer.nested_if:
-            # TODO: Rescan if_block in purpose to preprocess remaining directives
-            pass
-        
+        if not self._lexer.nested_if:            
+            lexer = self._lexer._lexer.clone()
+            if_block = self._parser.parse(if_block, lexer = lexer)
+
         p[0] = if_block
 
     @debug_production
@@ -427,24 +426,23 @@ class C99PreProcessorParser(object):
 
         block_evaluated = False
 
-        if p[0][0]:
-            if_block = p[0][1]
-            # TODO: Rescan if_block in purpose to preprocess remaining directives
+        if p[1][0]:
+            if_block = p[1][1]
             block_evaluated = True
         else:
-            for elif_group in p[1]:
+            for elif_group in p[2]:
                 if elif_group[0]:
                     if_block = elif_group[1]
                     block_evaluated = True
                     break
 
         if not block_evaluated:
-            if_block = p[2]
+            if_block = p[3]
 
         # Only rescan if we aren't in another if block which might evaluate to False, otherwise useless processing could happens.
         if not self._lexer.nested_if:
-            # TODO: Rescan if_block in purpose to preprocess remaining directives
-            pass
+            lexer = self._lexer._lexer.clone()
+            if_block = self._parser.parse(if_block, lexer = lexer)
 
         p[0] = if_block
 
@@ -454,7 +452,7 @@ class C99PreProcessorParser(object):
         if_group : IF constant_expression NEWLINE
                  | IF constant_expression NEWLINE group
         '''
-        group = None
+        group = ''
 
         if p[2]:
             if len(p) == 5:
@@ -468,7 +466,7 @@ class C99PreProcessorParser(object):
         if_group : IFDEF IDENTIFIER NEWLINE
                  | IFDEF IDENTIFIER NEWLINE group
         '''
-        group = None
+        group = ''
         is_defined = False
 
         if p[2] in self.macro:
@@ -484,7 +482,7 @@ class C99PreProcessorParser(object):
         if_group : IFNDEF IDENTIFIER NEWLINE
                  | IFNDEF IDENTIFIER NEWLINE group
         '''
-        group = None
+        group = ''
         is_defined = True
 
         if p[2] not in self.macro:
@@ -512,7 +510,7 @@ class C99PreProcessorParser(object):
         elif_group : ELIF constant_expression NEWLINE
                    | ELIF constant_expression NEWLINE group
         '''
-        group = None
+        group = ''
 
         if p[2]:
             if len(p) == 5:
@@ -526,7 +524,7 @@ class C99PreProcessorParser(object):
         else_group : ELSE NEWLINE
                    | ELSE NEWLINE group
         '''
-        group = None
+        group = ''
 
         if len(p) == 4:
             group = p[3]
@@ -538,7 +536,7 @@ class C99PreProcessorParser(object):
         '''
         endif_line : ENDIF NEWLINE
         '''
-        pass
+        p[0] = '\n'
 
     @debug_production
     def p_define_directive(self, p):
@@ -549,7 +547,7 @@ class C99PreProcessorParser(object):
             self.define_macro(p[2], replacement = p[3])
             p[0] = '\n'
         else:
-            p[0] = p[1:]
+            p[0] = f'{p[1]} {p[2]} {p[3]}'
 
     @debug_production
     def p_define_directive_2(self, p):
@@ -557,10 +555,10 @@ class C99PreProcessorParser(object):
         define_directive : DEFINE IDENTIFIER LPAREN ')' replacement_list
         '''
         if not self._lexer.nested_if:
-            self.define_macro(p[2], replacement = p[3])
+            self.define_macro(p[2], replacement = p[5])
             p[0] = '\n'
         else:
-            p[0] = p[1:]
+            p[0] = f'{p[1]} {p[2]}() {p[5]}'
 
     @debug_production
     def p_define_directive_3(self, p):
@@ -568,10 +566,10 @@ class C99PreProcessorParser(object):
         define_directive : DEFINE IDENTIFIER LPAREN identifier_list ')' replacement_list
         '''
         if not self._lexer.nested_if:
-            self.define_macro(p[2], replacement = p[6], arg_list = p[4])
+            self.define_macro(p[2], replacement = p[6], arg_list = p[4].split(','))
             p[0] = '\n'
         else:
-            p[0] = p[1:]
+            p[0] = f'{p[1]} {p[2]}({p[4]}) {p[6]}'
 
     @debug_production
     def p_define_directive_4(self, p):
@@ -582,7 +580,7 @@ class C99PreProcessorParser(object):
             self.define_macro(p[2], replacement = p[6], variadic = True)
             p[0] = '\n'
         else:
-            p[0] = p[1:]
+            p[0] = f'{p[1]} {p[2]}(...) {p[6]}'
 
     @debug_production
     def p_define_directive_5(self, p):
@@ -590,10 +588,10 @@ class C99PreProcessorParser(object):
         define_directive : DEFINE IDENTIFIER LPAREN identifier_list ',' ELLIPSIS ')' replacement_list
         '''
         if not self._lexer.nested_if:
-            self.define_macro(p[2], replacement = p[8], arg_list = p[4], variadic = True)
+            self.define_macro(p[2], replacement = p[8], arg_list = p[4].split(','), variadic = True)
             p[0] = '\n'
         else:
-            p[0] = p[1:]
+            p[0] = f'{p[1]} {p[2]}({p[4]},...) {p[8]}'
 
     @debug_production
     def p_error_directive(self, p):
@@ -607,7 +605,7 @@ class C99PreProcessorParser(object):
             elif len(p) == 3:
                 raise Exception(p[2])
         else:
-            p[0] = p[1:]
+            p[0] = f'{p[1]} {p[2] if len(p) == 2 else ""}'
 
     @debug_production
     def p_include_directive(self, p):
@@ -617,7 +615,7 @@ class C99PreProcessorParser(object):
         if not self.lexer.nested_if:
             p[0] = self.include(p[2])
         else:
-            p[0] = p[1:]
+            p[0] = f'{p[1]} {p[2]}'
 
     @debug_production
     def p_line_directive(self, p):
@@ -628,7 +626,7 @@ class C99PreProcessorParser(object):
             self.lineno_update(p[1:])
             p[0] = '\n'
         else:
-            p[0] = p[1:]
+            p[0] = f'{p[1]} {p[2]}'
 
     @debug_production
     def p_pragma_directive(self, p):
@@ -641,7 +639,7 @@ class C99PreProcessorParser(object):
             self.pragma(p[1:])
             p[0] = '\n'
         else:
-            p[0] = p[1:]
+            p[0] = ' '.join(p[1:])
 
     @debug_production
     def p_undef_directive(self, p):
@@ -652,7 +650,7 @@ class C99PreProcessorParser(object):
             self.undef_macro(p[2])
             p[0] = '\n'
         else:
-            p[0] = p[1:]
+            p[0] = f'{p[1]} {p[2]}'
     
     @debug_production
     def p_primary_expression(self, p):
@@ -838,13 +836,13 @@ class C99PreProcessorParser(object):
         text_line : NEWLINE
                   | token_list NEWLINE
         '''
-        p[0] = p[1:]
+        p[0] = ' '.join(p[1:])
 
     def p_conditionally_supported_directive(self, p):
         '''
         conditionally_supported_directive : DIRECTIVE token_list NEWLINE
         '''
-        pass
+        p[0] = '\n'
     
     @debug_production
     def p_identifier_list(self, p):
@@ -853,10 +851,9 @@ class C99PreProcessorParser(object):
                         | identifier_list ',' IDENTIFIER
         '''
         if len(p) == 2:
-            p[0] = [p[1]]
-        else:
-            p[1].append(p[3])
             p[0] = p[1]
+        else:
+            p[0] = ''.join(p[1:])
 
     @debug_production
     def p_replacement_list(self, p):
@@ -876,7 +873,7 @@ class C99PreProcessorParser(object):
         if len(p) == 2:
             p[0] = p[1]
         else:
-            p[0] = " ".join(p[1:])
+            p[0] = ' '.join(p[1:])
 
     def p_token(self, p):
         '''
@@ -957,7 +954,7 @@ class C99PreProcessorParser(object):
             print("Reach EOF")
 
     def parse(self, data):
-        self._parser.parse(data)
+        return self._parser.parse(data)
 
 class C99PreProcessor(object):
     '''

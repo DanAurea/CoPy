@@ -68,7 +68,7 @@ class Function(object):
 
 class Macro(object):
 
-    def __init__(self, name, replacement = None, arg_list = None, variadic = False):
+    def __init__(self, name, replacement = '', arg_list = None, variadic = False):
         self.name              = name
         self.replacement       = replacement
         self.arg_list          = arg_list
