@@ -7,12 +7,13 @@ import ply.yacc as yacc
 import re
 import time
 
-LETTER = r"[a-zA-Z]"
-DIGIT = r"[0-9]"
+LETTER       = r"[a-zA-Z]"
+DIGIT        = r"[0-9]"
 LETTER_DIGIT = r"[a-zA-Z-0-9]"
-E = f"""[Ee][+-]?{DIGIT}+"""
-FLOAT_SUFFIX = r"[fF]"
-INT_SUFFIX = r"[uU]"
+HEX_DIGIT    = r"[a-fA-F-0-9]"
+E            = f"""[Ee][+-]?{DIGIT}+"""
+FLOAT_SUFFIX = r"[fFlL]"
+INT_SUFFIX   = r"[uUlL]"
 
 COMMENT_RE = re.compile(r'\/\*[\s\S]*?\*\/+|//.*')
 
@@ -112,7 +113,7 @@ class C99PreProcessorLexer(object):
     t_HASH_HASH = r'\#\#'
 
     def __init__(self, **kwargs):
-        self._lexer    = lex.lex(module = self, **kwargs)
+        self._lexer    = lex.lex(module = self, reflags=re.UNICODE, **kwargs)
         self.lineno    = 1
         self.nested_if = 0
 
@@ -159,22 +160,59 @@ class C99PreProcessorLexer(object):
         r'L?"(\\.|[^\\\"])*"'
         return t
 
-    CONSTANT_RE = "|".join([
+    FLOAT_RE = "|".join([
                                 fr"""{DIGIT}+{E}{FLOAT_SUFFIX}?""",
                                 fr"""{DIGIT}*\.{DIGIT}+({E})?{FLOAT_SUFFIX}?""",
                                 fr"""{DIGIT}+\.{DIGIT}*({E})?{FLOAT_SUFFIX}?""",
-                                fr"""0[xX]{LETTER_DIGIT}+{INT_SUFFIX}?""",
-                                fr"""0{DIGIT}+{INT_SUFFIX}?""",
-                                fr"""{DIGIT}+{INT_SUFFIX}?""",
-                                fr"""L?'(\\.|[^\\'])+'""",
                             ])
     
-    @lex.TOKEN(CONSTANT_RE)
-    def t_CONSTANT(self, t):
-        # Data types are not handled because Python
-        # doesn't embed a way to differentiate
-        # signed and unsigned, this can be done on
-        # post process with intermediate code generation.
+    @lex.TOKEN(FLOAT_RE)
+    def t_FLOAT(self, t):
+        # Float values are constant but defined as a single rule
+        # to allow easier conversion from Python str to float.
+        
+        # TODO: Handle suffix, re captured group could be used but due to internal architecture 
+        # of PLY all captured groups of all token regexes are mixed and so order of regex will affect
+        # position of captured group.
+        t.value = float(t.value)
+        t.type  = "CONSTANT"
+        return t    
+    
+    HEX_RE = fr'0[xX]{HEX_DIGIT}+{INT_SUFFIX}?'
+    @lex.TOKEN(HEX_RE)
+    def t_HEX(self, t):
+        # Hex values are constant but defined as a single rule
+        # to allow easier conversion from Python str to float.
+        
+        # TODO: Handle suffix, re captured group could be used but due to internal architecture 
+        # of PLY all captured groups of all token regexes are mixed and so order of regex will affect
+        # position of captured group.
+        t.value = int(t.value, 16)
+        t.type = "CONSTANT"
+        return t
+
+    INTEGER_RE = "|".join([
+                                fr"""0{DIGIT}+({INT_SUFFIX})?""",
+                                fr"""{DIGIT}+({INT_SUFFIX})?""",
+                            ])
+    
+    @lex.TOKEN(INTEGER_RE)
+    def t_INTEGER(self, t):
+        # Integer values are constant but defined as a single rule
+        # to allow easier conversion from Python str to float. 
+
+        # TODO: Handle suffix, re captured group could be used but due to internal architecture 
+        # of PLY all captured groups of all token regexes are mixed and so order of regex will affect
+        # position of captured group.
+        t.value = int(t.value)
+        t.type = "CONSTANT"
+        return t
+
+    def t_LITERAL(self, t):
+        # Literal values are constant but defined as a single rule
+        # to allow easier conversion from Python str to float.
+        r'L?\'(\\.|[^\'])+\''
+        t.type = "CONSTANT"
         return t
 
     def t_LPAREN(self, t):
@@ -257,7 +295,7 @@ class C99PreProcessorParser(object):
             
             # Reset expansion flag to False to allow macro expansion in detection of a further token in current parsed text.
             self.macro[name].has_been_expanded = False
-            
+
             return replacement
         else:
             raise NameError(f'Macro {name} not defined.')
@@ -336,7 +374,8 @@ class C99PreProcessorParser(object):
         if len(p) == 2:
             p[0] = p[1]
         else:
-            p[0] = f'{p[1]} {p[2]}'
+            # No whitespace should be put between group/group_part, each group being separated by a newline
+            p[0] = f'{p[1]}{p[2]}'
 
     @debug_production
     def p_group_part(self, p):
@@ -873,7 +912,7 @@ class C99PreProcessorParser(object):
         if len(p) == 2:
             p[0] = p[1]
         else:
-            p[0] = ' '.join(p[1:])
+            p[0] = ' '.join([str(t) for t in p[1:]])
 
     def p_token(self, p):
         '''
@@ -1036,7 +1075,7 @@ class C99PreProcessor(object):
         self._parser.parse(file_content)
 
     def _is_source_file(self, file_content):
-        return file_content[-1] == '\n'
+        return len(file_content) and file_content[-1] == '\n'
 
     def process(self, input_path):
         """
@@ -1072,6 +1111,6 @@ class C99PreProcessor(object):
                 self._parse(file_content)
 
 if __name__ == "__main__":
-    pre_processor = C99PreProcessor("output/", debug = True, keep_comment = False)
+    pre_processor = C99PreProcessor("output/", debug = False, keep_comment = False)
 
     pre_processor.process("examples/digraph_trigraph")
