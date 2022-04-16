@@ -1,13 +1,4 @@
-%:define DLEVEL
-#ifndef DLEVEL
-??=define SIGNAL 1
-#else
-#define \
-SIGNAL \
-2 // splitted macro definition
-#define FUNC(x, a) (a + x)
-static int truc;
-#endif
+#include "directive.h"
 
 int main ()
 {

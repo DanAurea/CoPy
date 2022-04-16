@@ -244,16 +244,18 @@ class C99PreProcessorLexer(object):
 
         return token_list
 
-class C99PreProcessorParser(object):
+class C99PreProcessor(object):
 
-    def __init__(self, debug = False, **kwargs):
+    def __init__(self, stdlib_path = [], keep_comment = True, debug = False, **kwargs):
         self._current_file = ""
         
         self._lexer = C99PreProcessorLexer()
-        self.tokens  = self._lexer.tokens
+        self.tokens = self._lexer.tokens
 
-        self.macro = {} 
+        self.headers_table = {}
+        self.macro         = {} 
 
+        # TODO: These defines should be called inside the compiler instead
         self.define_macro("__DATE__", time.strftime, arg_list = ["%b %d %Y", time.localtime])
         self.define_macro("__FILE__", self._current_file)
         self.define_macro("__LINE__", self._lexer.lineno)
@@ -261,98 +263,25 @@ class C99PreProcessorParser(object):
 
         self._parser = yacc.yacc(module = self, debug = debug, start = "preprocessing_file", **kwargs)
         self._debug  = debug
+        self._di_tri_graph_replace_table =  {
+                                                # Digraph
+                                                '<:' : '[', '>:' : ']', '<%' : '{', '>%' : '}', '%:' : '#',  
+                                                # Trigraph
+                                                '??=' : '#', '??/' : '\\', '??\'' : '^', '??(' : '[',
+                                                '??)' : ']', '??!' : '|', '??<' : '{', '??>' : '}',
+                                                '??-' : '~',
+                                            }
 
-    def define_macro(self, name, replacement = None, arg_list = None, variadic = False):
-        """
-        Define a new Macro using intermediate representation.
-        
-        :param      name:        The macro name
-        :type       name:        str
-        :param      replacement:  The replacement list
-        :type       replacement:  object
-        :param      arg_list:          The argument list
-        :type       arg_list:          list or None if no arg list
-        :param      variadic:          Variable number of arguments
-        :type       variadic:          bool
-        """
-        self.macro[name] = ir.Macro(name, replacement, arg_list, variadic) 
-        return self.macro[name]
-
-    def expand_macro(self, name, arg_list = None):
-        """
-        Expands the macro.
-        
-        :param      name:      The name
-        :type       name:      str
-        :param      arg_list:  The argument list
-        :type       arg_list:  list
-        """
-        if name in self.macro:
-            if not self.macro[name].has_been_expanded:
-                replacement = self.macro[name].expand(arg_list)
-
-            # TODO : The replacement should be rescanned.
-            
-            # Reset expansion flag to False to allow macro expansion in detection of a further token in current parsed text.
-            self.macro[name].has_been_expanded = False
-
-            return replacement
+        if not stdlib_path:
+            self._stdlib_path = ["stdlib/",]
         else:
-            raise NameError(f'Macro {name} not defined.')
+            self._stdlib_path = stdlib_path
 
-    def undef_macro(self, name):
-        """
-        Undefine a macro.
-        
-        :param      name:  The name
-        :type       name:  str
-        """
-        return self.macro.pop(name, None)
+        self._keep_comment = keep_comment
 
-    def include(self, header_name):
-        """
-        Include a file.
-        
-        :param      header_name:  The header name
-        :type       header_name:  str
-        """
-        system_like     = False
-        include_content = ''
-
-        #TODO: Include header content
-        if header_name[0] == '<' and header_name[-1] == '>':
-            system_like = True
-
-        # Prevent appending of include content with next line in further parsing.
-        include_content += '\n'
-
-        return include_content
-
-    def pragma(self, directive):
-        """
-        Execute the pragma directive
-        
-        :param      directive:  The directive
-        :type       directive:  list
-        """
-        pass
-
-    def lineno_update(self, directive):
-        """
-        Update the line numberand source file.
-        
-        :param      directive:  The directive
-        :type       directive:  list
-        """
-
-    def write(self, file_content):
-        """
-        Write the preprocessed file content to output.
-        
-        :param      file_content:  The file content
-        :type       file_content:  str
-        """
-        pass
+    """
+    Preprocessor production rules + semantics actions
+    """
 
     @debug_production
     def p_preprocessing_file(self, p):
@@ -651,7 +580,7 @@ class C99PreProcessorParser(object):
         '''
         include_directive : INCLUDE token_list
         '''
-        if not self.lexer.nested_if:
+        if not self._lexer.nested_if:
             p[0] = self.include(p[2])
         else:
             p[0] = f'{p[1]} {p[2]}'
@@ -992,46 +921,126 @@ class C99PreProcessorParser(object):
         else:
             print("Reach EOF")
 
-    def parse(self, data):
-        return self._parser.parse(data)
+    """
+    Preprocessor methods
+    """
 
-class C99PreProcessor(object):
-    '''
-    Pre process include files.
-    The pre processor is in charge of macro expansion such as macro function, pragma, include or define.
-    '''
-    
-    def __init__(self, output_path, system_path = [], keep_comment = True, **kwargs):
-        self._output_path = output_path
-        self._parser = C99PreProcessorParser(**kwargs)
-            
-        self._headers_table = {}
+    def parse(self, data, lexer = None):
+        """
+        Parse the file content using C 99 standard.
         
-        self._di_tri_graph_replace_table =  {
-                                                # Digraph
-                                                '<:' : '[', '>:' : ']', '<%' : '{', '>%' : '}', '%:' : '#',  
-                                                # Trigraph
-                                                '??=' : '#', '??/' : '\\', '??\'' : '^', '??(' : '[',
-                                                '??)' : ']', '??!' : '|', '??<' : '{', '??>' : '}',
-                                                '??-' : '~',
-                                            }
+        :param      data:  The header/source file content
+        :type       data:  str
+        """
+        return self._parser.parse(data, lexer = lexer)
 
-        if not system_path:
-            self._system_path = ["stdlib/",]
+    def define_macro(self, name, replacement = None, arg_list = None, variadic = False):
+        """
+        Define a new Macro using intermediate representation.
+        
+        :param      name:        The macro name
+        :type       name:        str
+        :param      replacement:  The replacement list
+        :type       replacement:  object
+        :param      arg_list:          The argument list
+        :type       arg_list:          list or None if no arg list
+        :param      variadic:          Variable number of arguments
+        :type       variadic:          bool
+        """
+        self.macro[name] = ir.Macro(name, replacement, arg_list, variadic) 
+        return self.macro[name]
+
+    def expand_macro(self, name, arg_list = None):
+        """
+        Expands the macro.
+        
+        :param      name:      The name
+        :type       name:      str
+        :param      arg_list:  The argument list
+        :type       arg_list:  list
+        """
+        if name in self.macro:
+            if not self.macro[name].has_been_expanded:
+                replacement = self.macro[name].expand(arg_list)
+
+            # TODO : The replacement should be rescanned.
+            
+            # Reset expansion flag to False to allow macro expansion in detection of a further token in current parsed text.
+            self.macro[name].has_been_expanded = False
+
+            return replacement
         else:
-            self._system_path = system_path
+            raise NameError(f'Macro {name} not defined.')
 
-        self._keep_comment = keep_comment
-
-        for path in self._system_path:
-            self._link_header(path)
-
-    def _link_header(self, input_path):
+    def undef_macro(self, name):
         """
-        Link STD libs and set their location in the main dictionnary.
+        Undefine a macro.
+        
+        :param      name:  The name
+        :type       name:  str
         """
-        for path in Path(input_path).rglob('*.h'):
-            self._headers_table[path.name] = path
+        return self.macro.pop(name, None)
+
+    def include(self, header_name):
+        """
+        Include a file.
+        
+        :param      header_name:  The header name
+        :type       header_name:  str
+        """
+        include_content  = ''
+        is_include_found = False
+        header_path      = header_name[1:-1]
+
+        if header_path in self.headers_table:
+            return self.headers_table[header_path]
+
+        if header_name[0] == '"' and header_name[-1] == '"':
+            include_path = self._current_file.parent.joinpath(header_path)
+            is_include_found = include_path.is_file()
+
+        # If include hasn't been found in relative path or header name is enclosed by <> then looks inside
+        # stdlib path.
+        if not is_include_found:
+            for std_dir in self._stdlib_path:
+                include_path = Path(std_dir).joinpath(header_path)
+                is_include_found = include_path.is_file()
+                if is_include_found:
+                    break
+        
+        if not is_include_found:
+            # Neither stdlib/relative path yield an existing file so we have to raise an error.
+            raise FileNotFoundError(f'{header_path} doesn\'t resolve to an existing file.')
+        else:
+            include_content = self.process(include_path)
+
+        # Prevent appending of include content with next line in further parsing.
+        include_content += '\n'
+
+        # Add the preprocessed include inside the headers table so we can later output
+        # contents inside intermediate files *.i or avoid reprocessing an already preprocessed
+        # header.
+        self.headers_table[header_path] = include_content
+
+        return include_content
+
+    def pragma(self, directive):
+        """
+        Execute the pragma directive
+        
+        :param      directive:  The directive
+        :type       directive:  list
+        """
+        pass
+
+    def lineno_update(self, directive):
+        """
+        Update the line numberand source file.
+        
+        :param      directive:  The directive
+        :type       directive:  list
+        """
+        pass
 
     def _replace_di_trigraph(self, file_content):
         """
@@ -1063,54 +1072,49 @@ class C99PreProcessor(object):
         """
         return re.sub(COMMENT_RE, ' ', file_content)
 
-    def _parse(self, file_content):
-        """
-        Parse the file content using C 99 standard.
-        
-        :param      data:  The header/source file content
-        :type       data:  str
-        """
-        # Read the content of the header and parse it in purpose to
-        # construct the macro table and a token list.
-        self._parser.parse(file_content)
-
     def _is_source_file(self, file_content):
+        """
+        Determines whether the specified file content is source file.
+        
+        :param      file_content:  The file content
+        :type       file_content:  str
+        """
         return len(file_content) and file_content[-1] == '\n'
 
-    def process(self, input_path):
+    def process(self, file_path):
         """
-        Preprocess a project before compiling it to Python code.
+        Preprocess a source file before compiling it to Python code.
         
-        The pre processing is responsible of macro expansion which
+        The pre processing is responsible of directive execution which
         starts with '#'.
 
-        :param      input_path:  The input path
-        :type       input_path:  { type_description }
+        :param      file_path:  The file path
+        :type       file_path:  str
         """
-        self._link_header(input_path)
-        
-        # First pass will parse every headers to build macro tables and token list.
-        for path in Path(input_path, encoding = 'utf-8').rglob('*.[hc]'):
-            with open(path, 'rt') as header:
-                self._current_file = path.name
-                file_content = header.read()
-                
-                if not self._is_source_file(file_content):
-                    file_content += '\n'
+        file = Path(file_path, encoding = 'utf-8')
 
-                # Translation phase 1
-                file_content = self._replace_di_trigraph(file_content)
-                
-                # Translation phase 2
-                file_content = self._join_backslash(file_content)
-                
-                # Translation phase 3 and 4 are done in parallel
-                if not self._keep_comment:
-                    file_content = self._strip_comment(file_content)
-                
-                self._parse(file_content)
+        self._current_file = file
+        file_content = file.read_text()
+        
+        if not self._is_source_file(file_content):
+            file_content += '\n'
+
+        # Translation phase 1
+        file_content = self._replace_di_trigraph(file_content)
+        
+        # Translation phase 2
+        file_content = self._join_backslash(file_content)
+        
+        # Translation phase 3 and 4 are done in parallel
+        if not self._keep_comment:
+            file_content = self._strip_comment(file_content)
+        
+        # Clone the lexer to allow recursion without interfering with current tokenization.
+        lexer = self._lexer._lexer.clone()
+
+        return self.parse(file_content, lexer = lexer)
 
 if __name__ == "__main__":
-    pre_processor = C99PreProcessor("output/", debug = False, keep_comment = False)
+    pre_processor = C99PreProcessor(debug = False, keep_comment = False)
 
-    pre_processor.process("examples/digraph_trigraph")
+    pre_processor.process("examples/digraph_trigraph/directive.c")
