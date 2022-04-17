@@ -160,51 +160,67 @@ class C99PreProcessorLexer(object):
         r'L?"(\\.|[^\\\"])*"'
         return t
 
-    FLOAT_RE = "|".join([
-                                fr"""{DIGIT}+{E}{FLOAT_SUFFIX}?""",
-                                fr"""{DIGIT}*\.{DIGIT}+({E})?{FLOAT_SUFFIX}?""",
-                                fr"""{DIGIT}+\.{DIGIT}*({E})?{FLOAT_SUFFIX}?""",
-                            ])
-    
+    FLOAT_RE = fr'({DIGIT}+{E}|{DIGIT}*\.{DIGIT}+({E})?|{DIGIT}+\.{DIGIT}*({E})?)(?P<float_suffix>{FLOAT_SUFFIX})?'
     @lex.TOKEN(FLOAT_RE)
     def t_FLOAT(self, t):
         # Float values are constant but defined as a single rule
         # to allow easier conversion from Python str to float.
         
-        # TODO: Handle suffix, re captured group could be used but due to internal architecture 
-        # of PLY all captured groups of all token regexes are mixed and so order of regex will affect
-        # position of captured group.
-        t.value = float(t.value)
+        # TODO: Handle suffix
+        # PLY mix all token regexes into a single big regex with captured group
+        # so we can't rely on group position. So we are defining named group to ease
+        # trimming of suffixes.
+        # 
+        # We are testing all named suffixes for float because Python doesn't allow reuse
+        # of same name.
+        suffix = t.lexer.lexmatch.group('float_suffix')
+        t.value = float(t.value.rstrip(suffix))
         t.type  = "CONSTANT"
         return t    
     
-    HEX_RE = fr'0[xX]{HEX_DIGIT}+{INT_SUFFIX}?'
+    HEX_RE = fr'0[xX]{HEX_DIGIT}+(?P<hex_suffix>{INT_SUFFIX})?'
     @lex.TOKEN(HEX_RE)
     def t_HEX(self, t):
         # Hex values are constant but defined as a single rule
         # to allow easier conversion from Python str to float.
         
-        # TODO: Handle suffix, re captured group could be used but due to internal architecture 
-        # of PLY all captured groups of all token regexes are mixed and so order of regex will affect
-        # position of captured group.
-        t.value = int(t.value, 16)
+        # TODO: Handle suffix
+        # PLY mix all token regexes into a single big regex with captured group
+        # so we can't rely on group position. So we are defining named group to ease
+        # trimming of suffixes.
+        suffix = t.lexer.lexmatch.group('hex_suffix')
+        t.value = int(t.value.rstrip(suffix), base = 16)
         t.type = "CONSTANT"
         return t
 
-    INTEGER_RE = "|".join([
-                                fr"""0{DIGIT}+({INT_SUFFIX})?""",
-                                fr"""{DIGIT}+({INT_SUFFIX})?""",
-                            ])
-    
+    # DIGIT is not limited to [0-7] to avoid ambiguity between integer base 8 or 10.
+    OCT_RE = fr'0{DIGIT}+(?P<oct_suffix>{INT_SUFFIX})?'
+    @lex.TOKEN(OCT_RE)
+    def t_OCTAL(self, t):
+        # Octal values are constant but defined as a single rule
+        # to allow easier conversion from Python str to float.
+        
+        # TODO: Handle suffix
+        # PLY mix all token regexes into a single big regex with captured group
+        # so we can't rely on group position. So we are defining named group to ease
+        # trimming of suffixes.
+        suffix = t.lexer.lexmatch.group('oct_suffix')
+        t.value = int(t.value.rstrip(suffix), base = 8)
+        t.type = "CONSTANT"
+        return t
+
+    INTEGER_RE = fr'{DIGIT}+(?P<int_suffix>{INT_SUFFIX})?'
     @lex.TOKEN(INTEGER_RE)
     def t_INTEGER(self, t):
         # Integer values are constant but defined as a single rule
         # to allow easier conversion from Python str to float. 
 
-        # TODO: Handle suffix, re captured group could be used but due to internal architecture 
-        # of PLY all captured groups of all token regexes are mixed and so order of regex will affect
-        # position of captured group.
-        t.value = int(t.value)
+        # TODO: Handle suffix
+        # PLY mix all token regexes into a single big regex with captured group
+        # so we can't rely on group position. So we are defining named group to ease
+        # trimming of suffixes.
+        suffix = t.lexer.lexmatch.group('int_suffix')
+        t.value = int(t.value.rstrip(suffix))
         t.type = "CONSTANT"
         return t
 
