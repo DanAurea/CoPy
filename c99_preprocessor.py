@@ -232,12 +232,14 @@ class C99PreProcessorLexer(object):
         t.type = "CONSTANT"
         return t
 
+    # TODO: Check if lexer state could avoid these ambiguities by capturing whitespace ?
+    # Defining LPAREN will create ambiguities in define directives but shifting is what is expected and
+    # PLY shift by default so it seems ok.
     def t_LPAREN(self, t):
         r'(?<!\s)\('
         # Match a left parenthesis only if not preceded by white space character
         return t
 
-    
     # Error handling when an incorrect character is
     # being processed by the lexer.
     def t_error(self, t):
@@ -861,12 +863,17 @@ class C99PreProcessor(object):
         '''
         if p[1] in self.macro:
             arg_list = []
+
+            # TODO: '(' is being returned as a token so replacement is not fully correct. It should be skipped when
+            # macro expansion happens.
             # Lookahead so function like macro will be expanded correctly.
-            # if p.lexer.token().value == '(':
-            #     next_token = p.lexer.token().value
-            #     while next_token != ')':
-            #         arg_list.append(next_token)
-            #         next_token = p.lexer.token().value
+            lexer = p.lexer.clone()
+            if lexer.lexmatch.group() == '(':
+                next_token = p.lexer.next().value
+                while next_token != ')':
+                    if next_token != ',':
+                        arg_list.append(str(next_token))
+                    next_token = p.lexer.next().value
             p[0] = self.expand_macro(p[1], arg_list)
         else:
             p[0] = p[1]
@@ -905,6 +912,7 @@ class C99PreProcessor(object):
                                | PTR_OP
                                | OR_OP
                                | RIGHT_OP
+                               | LPAREN
                                | ';'
                                | '{'
                                | '}'
@@ -1136,7 +1144,7 @@ class C99PreProcessor(object):
         return self.parse(file_content, lexer = self._lexer._lexer.clone())
 
 if __name__ == "__main__":
-    pre_processor = C99PreProcessor(debug = True, keep_comment = False)
+    pre_processor = C99PreProcessor(debug = False, keep_comment = False)
 
     preprocessed_code = pre_processor.process("examples/digraph_trigraph/directive.c")
 

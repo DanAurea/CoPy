@@ -86,16 +86,19 @@ class Macro(object):
         replacement = self.replacement
 
         if arg_list:
-            if not self.variadic and len(arg_list) > self.arg_list:
-                raise Exception("Number of arguments exceed expected list length.")
+            if not self.variadic and len(arg_list) != len(self.arg_list):
+                raise Exception("Number of arguments not matching with expected list length.")
 
-            if callback:
+            if self.callback:
                 raise Exception("Callback macro can't be called with user provided argument list.")
 
             for label, arg in zip(self.arg_list, arg_list): 
-                replacement.replace(label, arg)
+                replacement = replacement.replace(label, arg)
+
         elif self.callback:
             replacement = callback(*self.arg_list)
+        elif self.arg_list and not arg_list:
+            raise Exception("Function like macro needs argument list.")
 
         self.has_been_expanded = True
 
