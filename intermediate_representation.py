@@ -68,14 +68,15 @@ class Function(object):
 
 class Macro(object):
 
-    def __init__(self, name, replacement = '', arg_list = None, variadic = False):
+    def __init__(self, name, replacement = '', arg_list = None, variadic = False, callback = None):
         self.name              = name
         self.replacement       = replacement
         self.arg_list          = arg_list
         self.variadic          = variadic
-        self.has_been_expanded = False 
+        self.has_been_expanded = False
+        self.callback          = callback
 
-    def expand(self, arg_list = None):
+    def expand(self, arg_list = []):
         """
         Expand a macro. 
 
@@ -88,8 +89,13 @@ class Macro(object):
             if not self.variadic and len(arg_list) > self.arg_list:
                 raise Exception("Number of arguments exceed expected list length.")
 
+            if callback:
+                raise Exception("Callback macro can't be called with user provided argument list.")
+
             for label, arg in zip(self.arg_list, arg_list): 
                 replacement.replace(label, arg)
+        elif self.callback:
+            replacement = callback(*self.arg_list)
 
         self.has_been_expanded = True
 

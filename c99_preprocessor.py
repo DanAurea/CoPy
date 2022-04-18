@@ -12,8 +12,8 @@ DIGIT        = r"[0-9]"
 LETTER_DIGIT = r"[a-zA-Z-0-9]"
 HEX_DIGIT    = r"[a-fA-F-0-9]"
 E            = f"""[Ee][+-]?{DIGIT}+"""
-FLOAT_SUFFIX = r"[fFlL]"
-INT_SUFFIX   = r"[uUlL]"
+FLOAT_SUFFIX = r"[fFlL]+"
+INT_SUFFIX   = r"[uUlL]+"
 
 COMMENT_RE = re.compile(r'\/\*[\s\S]*?\*\/+|//.*')
 
@@ -205,6 +205,7 @@ class C99PreProcessorLexer(object):
         # so we can't rely on group position. So we are defining named group to ease
         # trimming of suffixes.
         suffix = t.lexer.lexmatch.group('oct_suffix')
+
         t.value = int(t.value.rstrip(suffix), base = 8)
         t.type = "CONSTANT"
         return t
@@ -236,6 +237,7 @@ class C99PreProcessorLexer(object):
         # Match a left parenthesis only if not preceded by white space character
         return t
 
+    
     # Error handling when an incorrect character is
     # being processed by the lexer.
     def t_error(self, t):
@@ -356,8 +358,7 @@ class C99PreProcessor(object):
         
         # Only rescan if we aren't in another if block which might evaluate to False, otherwise useless processing could happens.
         if not self._lexer.nested_if:
-            lexer = self._lexer._lexer.clone()
-            if_block = self._parser.parse(if_block, lexer = lexer)
+            if_block = self.parse(if_block, lexer = self._lexer._lexer.clone())
 
         p[0] = if_block
 
@@ -378,8 +379,7 @@ class C99PreProcessor(object):
 
         # Only rescan if we aren't in another if block which might evaluate to False, otherwise useless processing could happens.
         if not self._lexer.nested_if:
-            lexer = self._lexer._lexer.clone()
-            if_block = self._parser.parse(if_block, lexer = lexer)
+            if_block = self.parse(if_block, lexer = self._lexer._lexer.clone())
 
         p[0] = if_block
 
@@ -397,8 +397,7 @@ class C99PreProcessor(object):
 
         # Only rescan if we aren't in another if block which might evaluate to False, otherwise useless processing could happens.
         if not self._lexer.nested_if:            
-            lexer = self._lexer._lexer.clone()
-            if_block = self._parser.parse(if_block, lexer = lexer)
+            if_block = self.parse(if_block, lexer = self._lexer._lexer.clone())
 
         p[0] = if_block
 
@@ -425,8 +424,7 @@ class C99PreProcessor(object):
 
         # Only rescan if we aren't in another if block which might evaluate to False, otherwise useless processing could happens.
         if not self._lexer.nested_if:
-            lexer = self._lexer._lexer.clone()
-            if_block = self._parser.parse(if_block, lexer = lexer)
+            if_block = self.parse(if_block, lexer = self._lexer._lexer.clone())
 
         p[0] = if_block
 
@@ -607,8 +605,7 @@ class C99PreProcessor(object):
         line_directive : LINE token_list
         '''
         if not self._lexer.nested_if:
-            self.lineno_update(p[1:])
-            p[0] = '\n'
+            p[0] = self.lineno_update(p[1:])
         else:
             p[0] = f'{p[1]} {p[2]}'
 
@@ -617,11 +614,10 @@ class C99PreProcessor(object):
         '''
         pragma_directive : PRAGMA
                          | PRAGMA token_list
-                         | _PRAGMA '(' STRING_LITERAL ')'
+                         | _PRAGMA LPAREN STRING_LITERAL ')'
         '''
         if not self._lexer.nested_if:
-            self.pragma(p[1:])
-            p[0] = '\n'
+            p[0] = self.pragma(p[1:])
         else:
             p[0] = ' '.join(p[1:])
 
@@ -652,14 +648,14 @@ class C99PreProcessor(object):
 
     @debug_production
     def p_primary_expression3(self, p):
-        '''primary_expression : '(' constant_expression ')' '''
+        '''primary_expression : LPAREN constant_expression ')' '''
         p[0] = p[2]
 
     @debug_production
     def p_unary_expression(self, p):
         '''unary_expression : primary_expression
                             | unary_operator unary_expression
-                            | DEFINED '(' IDENTIFIER ')' '''
+                            | DEFINED LPAREN IDENTIFIER ')' '''
         if len(p) == 2:
             p[0] = p[1]
         elif len(p) == 3:
@@ -864,7 +860,14 @@ class C99PreProcessor(object):
         token :     IDENTIFIER
         '''
         if p[1] in self.macro:
-            p[0] = self.expand_macro(p[1])
+            arg_list = []
+            # Lookahead so function like macro will be expanded correctly.
+            # if p.lexer.token().value == '(':
+            #     next_token = p.lexer.token().value
+            #     while next_token != ')':
+            #         arg_list.append(next_token)
+            #         next_token = p.lexer.token().value
+            p[0] = self.expand_macro(p[1], arg_list)
         else:
             p[0] = p[1]
 
@@ -978,9 +981,13 @@ class C99PreProcessor(object):
         if name in self.macro:
             if not self.macro[name].has_been_expanded:
                 replacement = self.macro[name].expand(arg_list)
+            else:
+                print("Warning: Macro can't be expanded twice")
 
-            # TODO : The replacement should be rescanned.
-            
+            # TODO: Rescanning currently yield "Reach EOF" with current examples (investigate why)
+            # replacement needs to be casted to str due to return of int/float from lexer (see if it can be handled better).
+            # self.parse(str(replacement), lexer = self._lexer._lexer.clone())
+
             # Reset expansion flag to False to allow macro expansion in detection of a further token in current parsed text.
             self.macro[name].has_been_expanded = False
 
@@ -1047,7 +1054,7 @@ class C99PreProcessor(object):
         :param      directive:  The directive
         :type       directive:  list
         """
-        pass
+        return '\n'
 
     def lineno_update(self, directive):
         """
@@ -1056,7 +1063,7 @@ class C99PreProcessor(object):
         :param      directive:  The directive
         :type       directive:  list
         """
-        pass
+        return '\n'
 
     def _replace_di_trigraph(self, file_content):
         """
@@ -1126,11 +1133,11 @@ class C99PreProcessor(object):
             file_content = self._strip_comment(file_content)
         
         # Clone the lexer to allow recursion without interfering with current tokenization.
-        lexer = self._lexer._lexer.clone()
-
-        return self.parse(file_content, lexer = lexer)
+        return self.parse(file_content, lexer = self._lexer._lexer.clone())
 
 if __name__ == "__main__":
-    pre_processor = C99PreProcessor(debug = False, keep_comment = False)
+    pre_processor = C99PreProcessor(debug = True, keep_comment = False)
 
-    pre_processor.process("examples/digraph_trigraph/directive.c")
+    preprocessed_code = pre_processor.process("examples/digraph_trigraph/directive.c")
+
+    print(preprocessed_code)
