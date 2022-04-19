@@ -242,9 +242,9 @@ class C99PreProcessorLexer(object):
     def t_directive_error(self, t):
         t.lexer.skip(1)
 
-    # TODO: Check if lexer state could avoid these ambiguities by capturing whitespace ?
-    # Defining LPAREN will create ambiguities in define directives but shifting is what is expected and
-    # PLY shift by default so it seems ok.
+    # Defining LPAREN in operator_punc and define_directive will lead to ambiguities due to replacement_list
+    # to avoid this we only define LPAREN inside directive, this will avoid any further issues with text_line
+    # reporting lexer error for LPAREN.
     def t_directive_LPAREN(self, t):
         r'(?<!\s)\('
         # Match a left parenthesis only if not preceded by white space character
@@ -303,7 +303,6 @@ class C99PreProcessor(object):
         self.define_macro("__TIME__", callback = time.strftime, arg_list = ["%H:%M:%S"])
 
         self._parser = yacc.yacc(module = self, debug = debug, start = "preprocessing_file", **kwargs)
-        self._debug  = debug
         self._di_tri_graph_replace_table =  {
                                                 # Digraph
                                                 '<:' : '[', '>:' : ']', '<%' : '{', '>%' : '}', '%:' : '#',  
@@ -318,7 +317,8 @@ class C99PreProcessor(object):
         else:
             self._stdlib_path = stdlib_path
 
-        self._keep_comment = keep_comment
+        self._keep_comment       = keep_comment
+        self._debug              = debug
         self._discard_next_paren = False
 
     """
@@ -839,7 +839,7 @@ class C99PreProcessor(object):
         text_line : NEWLINE
                   | token_list NEWLINE
         '''
-        p[0] = ' '.join(p[1:])
+        p[0] = ' '.join([str(t) for t in p[1:]])
 
     def p_conditionally_supported_directive(self, p):
         '''
@@ -897,9 +897,6 @@ class C99PreProcessor(object):
         '''
         if p[1] in self.macro:
             arg_list = []
-
-            # TODO: '(' is being returned as a token so replacement is not fully correct. It should be skipped when
-            # macro expansion happens.
 
             # Lookahead so function like macro will be expanded correctly.
             lexer = p.lexer.clone()
@@ -1028,7 +1025,7 @@ class C99PreProcessor(object):
         self.macro[name] = ir.Macro(name, **kwargs) 
         return self.macro[name]
 
-    def expand_macro(self, name, arg_list = None):
+    def expand_macro(self, name, arg_list = []):
         """
         Expands the macro.
         
@@ -1041,12 +1038,15 @@ class C99PreProcessor(object):
             replacement = ''
             if not self.macro[name].has_been_expanded:
                 replacement = self.macro[name].expand(arg_list)
+
+                # Rescanning  yield "Reach EOF" because parser expects the input to be compliant as a source file.
+                # So we are appending a newline to the replacement to follow C standard.
+                # NB: replacement needs to be casted to str due to return of int/float from lexer (see if it can be handled better).
+                lexer = self._lexer._lexer.clone()
+                lexer_input = str(replacement) + '\n' if not self._is_source_file(str(replacement)) else str(replacement)
+                self.parse(lexer_input, lexer = lexer)
             else:
                 print("Warning: Macro can't be expanded twice")
-
-            # TODO: Rescanning currently yield "Reach EOF" for unknown reason
-            # replacement needs to be casted to str due to return of int/float from lexer (see if it can be handled better).
-            #self.parse(str(replacement), lexer = self._lexer._lexer.clone())
 
             # Reset expansion flag to False to allow macro expansion in detection of a further token in current parsed text.
             self.macro[name].has_been_expanded = False
