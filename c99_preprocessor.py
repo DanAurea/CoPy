@@ -628,7 +628,9 @@ class C99PreProcessor(object):
         line_directive : LINE token_list
         '''
         if not self._lexer.nested_if:
-            p[0] = self.lineno_update(p[1:])
+            p[2] = str(p[2])
+            token_list = p[2].split(' ')
+            p[0] = self.lineno_update(token_list)
         else:
             p[0] = f'{p[1]} {p[2]}'
 
@@ -1123,6 +1125,12 @@ class C99PreProcessor(object):
         :param      directive:  The directive
         :type       directive:  list
         """
+        if len(directive) == 1:
+            self._lexer._lexer.lineno = int(directive[0])
+        else:
+            self._lexer._lexer.lineno = int(directive[0])
+            self._current_file        = Path(directive[1].replace('"', ''), encoding = 'utf-8')
+        
         return '\n'
 
     def _replace_di_trigraph(self, file_content):
