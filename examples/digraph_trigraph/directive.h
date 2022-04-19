@@ -17,6 +17,6 @@ SIGNAL \
 #define SIGNAL 012UL
 
 #endif
-#define FUNC(x, a) (a + x)
+#define FUNC(x, a) a + x
 static int elseVariable;
 #endif

@@ -68,13 +68,13 @@ class Function(object):
 
 class Macro(object):
 
-    def __init__(self, name, replacement = '', arg_list = None, variadic = False, callback = None):
+    def __init__(self, name, replacement = '', arg_list = [], variadic = False, callback = None):
         self.name              = name
         self.replacement       = replacement
         self.arg_list          = arg_list
         self.variadic          = variadic
-        self.has_been_expanded = False
         self.callback          = callback
+        self.has_been_expanded = False
 
     def expand(self, arg_list = []):
         """
@@ -96,7 +96,11 @@ class Macro(object):
                 replacement = replacement.replace(label, arg)
 
         elif self.callback:
-            replacement = callback(*self.arg_list)
+            callback_return = self.callback(*self.arg_list)
+            if type(callback_return) == str:
+                replacement = f'"{callback_return}"'
+            else:
+                replacement = str(callback_return)
         elif self.arg_list and not arg_list:
             raise Exception("Function like macro needs argument list.")
 

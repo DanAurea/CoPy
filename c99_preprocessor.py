@@ -87,6 +87,9 @@ class C99PreProcessorLexer(object):
     # Skip whitespaces
     t_ignore = ' \t'
 
+    # Ignored characters for directive
+    t_directive_ignore = ' \t'
+
     # Operators
     t_ELLIPSIS = r'\.\.\.'
     t_LEFT_ASSIGN = r'<<='
@@ -112,17 +115,18 @@ class C99PreProcessorLexer(object):
     t_NE_OP = r'!='
     t_HASH_HASH = r'\#\#'
 
+    states = (
+        ('directive','inclusive'),
+    )
+
     def __init__(self, **kwargs):
         self._lexer    = lex.lex(module = self, reflags=re.UNICODE, **kwargs)
-        self.lineno    = 1
         self.nested_if = 0
 
     # Define a rule so we can track line numbers
     def t_NEWLINE(self, t):
         r'\n+'
         t.lexer.lineno += len(t.value)
-        
-        self.lineno = t.lexer.lineno
         
         return t
 
@@ -137,6 +141,8 @@ class C99PreProcessorLexer(object):
 
     def t_DIRECTIVE(self, t):
         r'\#[a-zA-Z_][a-zA-Z_0-9]*'
+
+        t.lexer.begin("directive")
 
         # Check first if it's a standard C directive
         if t.value in self.reserved:
@@ -231,13 +237,29 @@ class C99PreProcessorLexer(object):
         r'L?\'(\\.|[^\'])+\''
         t.type = "CONSTANT"
         return t
+ 
+    # For bad characters, we just skip over it
+    def t_directive_error(self, t):
+        t.lexer.skip(1)
 
     # TODO: Check if lexer state could avoid these ambiguities by capturing whitespace ?
     # Defining LPAREN will create ambiguities in define directives but shifting is what is expected and
     # PLY shift by default so it seems ok.
-    def t_LPAREN(self, t):
+    def t_directive_LPAREN(self, t):
         r'(?<!\s)\('
         # Match a left parenthesis only if not preceded by white space character
+        return t
+
+    def t_directive_RPAREN(self, t):
+        r'\)'
+        t.lexer.begin("INITIAL")
+        t.type = ')'
+        return t
+
+    # Match any parenthesis and return it as a literal to avoid ambiguity between lparen and '(' in production rule.
+    def t_LPAREN(self, t):
+        r'\('
+        t.type = '('      # Set token type to the expected literal
         return t
 
     # Error handling when an incorrect character is
@@ -267,7 +289,7 @@ class C99PreProcessorLexer(object):
 class C99PreProcessor(object):
 
     def __init__(self, stdlib_path = [], keep_comment = True, debug = False, **kwargs):
-        self._current_file = ""
+        self._current_file = Path()
         
         self._lexer = C99PreProcessorLexer()
         self.tokens = self._lexer.tokens
@@ -275,11 +297,10 @@ class C99PreProcessor(object):
         self.headers_table = {}
         self.macro         = {} 
 
-        # TODO: These defines should be called inside the compiler instead
-        self.define_macro("__DATE__", time.strftime, arg_list = ["%b %d %Y", time.localtime])
-        self.define_macro("__FILE__", self._current_file)
-        self.define_macro("__LINE__", self._lexer.lineno)
-        self.define_macro("__TIME__", time.strftime, arg_list = ["%H:%M:%S", time.localtime])
+        self.define_macro("__DATE__", callback = time.strftime, arg_list = ["%b %d %Y"])
+        self.define_macro("__FILE__", callback = self.get_current_filename)
+        self.define_macro("__LINE__", callback = self.get_lineno)
+        self.define_macro("__TIME__", callback = time.strftime, arg_list = ["%H:%M:%S"])
 
         self._parser = yacc.yacc(module = self, debug = debug, start = "preprocessing_file", **kwargs)
         self._debug  = debug
@@ -298,11 +319,11 @@ class C99PreProcessor(object):
             self._stdlib_path = stdlib_path
 
         self._keep_comment = keep_comment
+        self._discard_next_paren = False
 
     """
     Preprocessor production rules + semantics actions
     """
-
     @debug_production
     def p_preprocessing_file(self, p):
         '''
@@ -616,7 +637,7 @@ class C99PreProcessor(object):
         '''
         pragma_directive : PRAGMA
                          | PRAGMA token_list
-                         | _PRAGMA LPAREN STRING_LITERAL ')'
+                         | _PRAGMA '(' STRING_LITERAL ')'
         '''
         if not self._lexer.nested_if:
             p[0] = self.pragma(p[1:])
@@ -650,14 +671,14 @@ class C99PreProcessor(object):
 
     @debug_production
     def p_primary_expression3(self, p):
-        '''primary_expression : LPAREN constant_expression ')' '''
+        '''primary_expression : '(' constant_expression ')' '''
         p[0] = p[2]
 
     @debug_production
     def p_unary_expression(self, p):
         '''unary_expression : primary_expression
                             | unary_operator unary_expression
-                            | DEFINED LPAREN IDENTIFIER ')' '''
+                            | DEFINED '(' IDENTIFIER ')' '''
         if len(p) == 2:
             p[0] = p[1]
         elif len(p) == 3:
@@ -855,7 +876,20 @@ class C99PreProcessor(object):
         if len(p) == 2:
             p[0] = p[1]
         else:
-            p[0] = ' '.join([str(t) for t in p[1:]])
+            tokens = p[1:]
+            
+            # TODO: Check if there's a better way to skip open parenthesis once function-like macro
+            # has been expanded.
+            # 
+            # HACK: Because we are looking ahead for function-like macro expansion and PLY internally
+            # return matched '(' which is done before identifier is being expanded.
+            # So to know we need to skip it a boolean is set when function-like macro is
+            # expanded.
+            if self._discard_next_paren and tokens[1] == '(':
+                tokens.pop()
+                self._discard_next_paren = False
+
+            p[0] = ' '.join([str(t) for t in tokens])
 
     def p_token(self, p):
         '''
@@ -866,14 +900,19 @@ class C99PreProcessor(object):
 
             # TODO: '(' is being returned as a token so replacement is not fully correct. It should be skipped when
             # macro expansion happens.
+
             # Lookahead so function like macro will be expanded correctly.
             lexer = p.lexer.clone()
+
             if lexer.lexmatch.group() == '(':
                 next_token = p.lexer.next().value
                 while next_token != ')':
                     if next_token != ',':
                         arg_list.append(str(next_token))
                     next_token = p.lexer.next().value
+                
+                self._discard_next_paren = True
+
             p[0] = self.expand_macro(p[1], arg_list)
         else:
             p[0] = p[1]
@@ -912,7 +951,6 @@ class C99PreProcessor(object):
                                | PTR_OP
                                | OR_OP
                                | RIGHT_OP
-                               | LPAREN
                                | ';'
                                | '{'
                                | '}'
@@ -951,6 +989,23 @@ class C99PreProcessor(object):
     """
     Preprocessor methods
     """
+    def get_current_filename(self, *args):
+        """
+        Gets the current file.
+        
+        :param      args:  The arguments
+        :type       args:  list
+        """
+        return self._current_file.name
+
+    def get_lineno(self, *args):
+        """
+        Gets the lineno.
+        
+        :param      args:  The arguments
+        :type       args:  list
+        """
+        return self._lexer._lexer.lineno
 
     def parse(self, data, lexer = None):
         """
@@ -961,20 +1016,16 @@ class C99PreProcessor(object):
         """
         return self._parser.parse(data, lexer = lexer)
 
-    def define_macro(self, name, replacement = None, arg_list = None, variadic = False):
+    def define_macro(self, name, **kwargs):
         """
         Define a new Macro using intermediate representation.
         
-        :param      name:        The macro name
-        :type       name:        str
-        :param      replacement:  The replacement list
-        :type       replacement:  object
-        :param      arg_list:          The argument list
-        :type       arg_list:          list or None if no arg list
-        :param      variadic:          Variable number of arguments
-        :type       variadic:          bool
+        :param      name:       The macro name
+        :type       name:       str
+        :param      kwargs:     The keyword arguments
+        :type       kwargs:     dict
         """
-        self.macro[name] = ir.Macro(name, replacement, arg_list, variadic) 
+        self.macro[name] = ir.Macro(name, **kwargs) 
         return self.macro[name]
 
     def expand_macro(self, name, arg_list = None):
@@ -987,14 +1038,15 @@ class C99PreProcessor(object):
         :type       arg_list:  list
         """
         if name in self.macro:
+            replacement = ''
             if not self.macro[name].has_been_expanded:
                 replacement = self.macro[name].expand(arg_list)
             else:
                 print("Warning: Macro can't be expanded twice")
 
-            # TODO: Rescanning currently yield "Reach EOF" with current examples (investigate why)
+            # TODO: Rescanning currently yield "Reach EOF" for unknown reason
             # replacement needs to be casted to str due to return of int/float from lexer (see if it can be handled better).
-            # self.parse(str(replacement), lexer = self._lexer._lexer.clone())
+            #self.parse(str(replacement), lexer = self._lexer._lexer.clone())
 
             # Reset expansion flag to False to allow macro expansion in detection of a further token in current parsed text.
             self.macro[name].has_been_expanded = False
@@ -1043,7 +1095,7 @@ class C99PreProcessor(object):
             # Neither stdlib/relative path yield an existing file so we have to raise an error.
             raise FileNotFoundError(f'{header_path} doesn\'t resolve to an existing file.')
         else:
-            include_content = self.process(include_path)
+            include_content = self.process(include_path, self._lexer._lexer.clone())
 
         # Prevent appending of include content with next line in further parsing.
         include_content += '\n'
@@ -1112,7 +1164,7 @@ class C99PreProcessor(object):
         """
         return len(file_content) and file_content[-1] == '\n'
 
-    def process(self, file_path):
+    def process(self, file_path, lexer = None):
         """
         Preprocess a source file before compiling it to Python code.
         
@@ -1124,7 +1176,10 @@ class C99PreProcessor(object):
         """
         file = Path(file_path, encoding = 'utf-8')
 
+        # Store temporarily current file in case of include
+        current_file_tmp = self._current_file 
         self._current_file = file
+
         file_content = file.read_text()
         
         if not self._is_source_file(file_content):
@@ -1140,8 +1195,14 @@ class C99PreProcessor(object):
         if not self._keep_comment:
             file_content = self._strip_comment(file_content)
         
+        if not lexer:
+            lexer = self._lexer._lexer
+
         # Clone the lexer to allow recursion without interfering with current tokenization.
-        return self.parse(file_content, lexer = self._lexer._lexer.clone())
+        preprocessed_output = self.parse(file_content, lexer = lexer)
+        self._current_file = current_file_tmp
+
+        return preprocessed_output
 
 if __name__ == "__main__":
     pre_processor = C99PreProcessor(debug = False, keep_comment = False)
