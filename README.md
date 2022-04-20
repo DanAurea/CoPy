@@ -73,7 +73,7 @@ class Example(Structure):
                     ("secondField_u32", c_uint32, 16),
                     ("thirdField_u32", c_uint32, 15),
                     ("fourthField_u32", c_uint32, 1),
-                    ("dep_s", structDependency),
+                    ("dep_s", dependency.Dependency),
                 ]
 
 # dependency.py
