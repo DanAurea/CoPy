@@ -662,7 +662,8 @@ class C99PreProcessor(object):
         '''primary_expression : IDENTIFIER
         '''
         if p[1] in self.macro:
-            p[0] = self.expand_macro(p[1])
+            replacement = self.expand_macro(p[1])
+            p[0] = replacement if replacement != None else p[1]
         else:
             p[0] = p[1]
 
@@ -899,20 +900,29 @@ class C99PreProcessor(object):
         '''
         if p[1] in self.macro:
             arg_list = []
+            replacement = None
 
             # Lookahead so function like macro will be expanded correctly.
             lexer = p.lexer.clone()
 
+            # We lookahead with a cloned lexer so we are able to backtrack if we see
+            # that macro should not be expanded because it's being recursive.
             if lexer.lexmatch.group() == '(':
-                next_token = p.lexer.next().value
+                next_token = lexer.next().value
                 while next_token != ')':
                     if next_token != ',':
                         arg_list.append(str(next_token))
-                    next_token = p.lexer.next().value
+                    next_token = lexer.next().value
+            
+                replacement = self.expand_macro(p[1], arg_list)
                 
-                self._discard_next_paren = True
+                if replacement != None:
+                    p.lexer.lexpos = lexer.lexpos
+                    self._discard_next_paren = True
+            else:
+                replacement = self.expand_macro(p[1], arg_list)
 
-            p[0] = self.expand_macro(p[1], arg_list)
+            p[0] = replacement if replacement != None else p[1]
         else:
             p[0] = p[1]
 
@@ -1037,18 +1047,20 @@ class C99PreProcessor(object):
         :type       arg_list:  list
         """
         if name in self.macro:
-            replacement = ''
+            replacement = None
             if not self.macro[name].has_been_expanded:
                 replacement = self.macro[name].expand(arg_list)
-
+                
                 # Rescanning  yield "Reach EOF" because parser expects the input to be compliant as a source file.
                 # So we are appending a newline to the replacement to follow C standard.
                 # NB: replacement needs to be casted to str due to return of int/float from lexer (see if it can be handled better).
                 lexer = self._lexer._lexer.clone()
-                lexer_input = str(replacement) + '\n' if not self._is_source_file(str(replacement)) else str(replacement)
-                self.parse(lexer_input, lexer = lexer)
+                lexer_input = str(replacement) + '\n'
+                
+                # We remove last char which is the extra newline added previously to allow parsing of the replacement as a source file.
+                replacement = self.parse(lexer_input, lexer = lexer)[:-1]
             else:
-                print("Warning: Macro can't be expanded twice")
+                print(f'Warning: Macro {name} is recursive')
 
             # Reset expansion flag to False to allow macro expansion in detection of a further token in current parsed text.
             self.macro[name].has_been_expanded = False
