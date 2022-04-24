@@ -10,7 +10,7 @@ class CoPYCompiler(object):
     Comments found inside structures will be kept intact.
     '''
     def __init__(self, output_path):
-        self._pre_processor = C99PreProcessor(output_path)
+        self._pre_processor = C99PreProcessor()
 
     def compile(self, input_path):
         self._pre_processor.process(input_path)
@@ -40,11 +40,14 @@ class CoPy99Compiler(CoPYCompiler):
 
     def __init__(self, output_path):
         super(CoPy99Compiler, self).__init__(output_path)
-        self._parser = C99Parser()
+        self._parser        = C99Parser()
 
     def compile(self, input_path):
         super(CoPy99Compiler, self).compile(input_path)
+        
+        preprocessed_output = self._pre_processor.process(input_path)
+        self._parser.parse(preprocessed_output)
 
 if __name__ == "__main__":
     compiler = CoPy99Compiler("output/")
-    compiler.compile("examples/")
+    compiler.compile("examples/digraph_trigraph/directive.h")

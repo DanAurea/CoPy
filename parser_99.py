@@ -20,6 +20,8 @@ class C99Parser(object):
         self._parser       = yacc.yacc(module = self, debug = debug, **kwargs)
         self._debug        = debug
 
+        self._current_enumerator_value = 0
+
     @debug_production
     def p_translation_unit(self, p):
         '''translation_unit : external_declaration 
@@ -271,15 +273,20 @@ class C99Parser(object):
         '''declaration : declaration_specifiers ';' 
                        | declaration_specifiers init_declarator_list ';' '''
         if len(p) == 4:
-            declaration_specifiers = p[1]
-            
-            # TODO: Handle all aliases            
-            declaration_specifiers[1].identifier = p[2][0]
+            # TODO: Find how to get rid of type checking (that's a really bad design)
+            if type(p[1]) == list and p[1][0] == "typedef":
+                alias_list = p[2]
+                typedef = p[1][1]
 
-            if p[1][0] == "typedef" and declaration_specifiers[1].identifier:
-                # TODO: Handle all aliases
-                self._lexer._symbol_table[declaration_specifiers[1].identifier]["type"] = "TYPEDEF_NAME"
-                self._lexer._symbol_table[declaration_specifiers[1].identifier]["value"] = declaration_specifiers[1]
+                for alias in alias_list:
+                    typedef.identifier = alias
+                    self._lexer.add_type(alias, typedef)
+            elif type(p[1]) in [ir.Enumeration, ir.Struct, ir.Union]:
+                if p[1].is_incomplete():
+                    if not self._lexer.tag_exist(p[1].identifier):
+                        raise Exception(f'Tag {p[1].identifer} not found.')
+                    else:
+                        self._lexer.get_tag(p[1].identifier)      
 
     @debug_production
     def p_declaration_specifiers(self, p):
@@ -313,9 +320,9 @@ class C99Parser(object):
         '''init_declarator : declarator
                            | declarator '=' initializer '''
         if len(p) == 2:
-            p[0] = p[1]
+            p[0] = (p[1],)
         else:
-            p[0] = p[1], p[3]
+            p[0] = (p[1], p[3])
 
     @debug_production
     def p_storage_class_specifier(self, p):
@@ -352,14 +359,27 @@ class C99Parser(object):
                                      | struct_or_union IDENTIFIER '''
         if p[1] == 'struct':
             if len(p) == 5:
-                struct = ir.Struct(identifier = None, declaration_list = p[3])
+                struct = ir.Struct(identifier = '', declaration_list = p[3])
             elif len(p) == 6:
-                struct = ir.Struct(identifier = p[2], declaration_list = p[4])
+                struct = ir.Struct(identifier = '', declaration_list = p[4])
+                self._lexer.add_tag(p[2], struct)
             else:
-                struct = ir.Struct(identifier = p[2], declaration_list = None)
+                # We don't know yet if it's a forward declaration or a type specifier.
+                struct = ir.Struct(identifier = '')
+                # We don't know yet if it's a forward declaration or a type specifier so return value is not checked
+                self._lexer.add_tag(p[2], struct)
             p[0] = struct
         elif p[1] == 'union':
-            pass
+            if len(p) == 5:
+                union = ir.Union(identifier = '', declaration_list = p[3])
+            elif len(p) == 6:
+                union = ir.Union(identifier = '', declaration_list = p[4])
+                self._lexer.add_tag(p[2], union)
+            else:
+                union = ir.Union(identifier = '')
+                # We don't know yet if it's a forward declaration or a type specifier so return value is not checked
+                self._lexer.add_tag(p[2], struct)
+            p[0] = union
 
     @debug_production
     def p_struct_or_union(self, p):
@@ -400,7 +420,7 @@ class C99Parser(object):
         '''struct_declarator_list : struct_declarator
                                   | struct_declarator_list ',' struct_declarator'''
         if len(p) == 2:
-            p[0] = p[1]
+            p[0] = [p[1]]
         else:
             p[1].append(p[3])
             p[0] = p[1]
@@ -410,25 +430,33 @@ class C99Parser(object):
         '''struct_declarator : declarator
                              | ':' constant_expression
                              | declarator ':' constant_expression '''
-        
-        # Return a splitted representation of struct declarator
         if len(p) == 2:
-            p[0] = [p[1],]
+            p[0] = ir.StructDeclarator(declarator = p[1])
         elif len(p) == 3:
-            p[0] = [p[2],]
+            p[0] = ir.StructDeclarator(bitfield = p[3])
         else:
-            p[0] = [p[1], p[3],]
+            p[0] = ir.StructDeclarator(declarator = p[1], bitfield = p[3])
 
     @debug_production
     def p_enum_specifier(self, p):
         '''enum_specifier : ENUM '{' enumerator_list '}'
-                          | ENUM IDENTIFIER '{' enumerator_list '}'
-                          | ENUM '{' enumerator_list  ',' '}'
-                          | ENUM IDENTIFIER '{' enumerator_list  ',' '}'
-                          | ENUM IDENTIFIER'''
-        #TODO: Handle enumeration with identifier        
-        if len(p) == 5:
-            p[0] = ir.Enumeration(enumerator_list = p[3])
+                          | ENUM '{' enumerator_list  ',' '}' '''
+        p[0] = ir.Enumeration(enumerator_list = p[3])
+        self._current_enumerator_value = 0
+
+    @debug_production
+    def p_enum_specifier2(self, p):
+        '''enum_specifier : ENUM IDENTIFIER '{' enumerator_list '}'
+                          | ENUM IDENTIFIER '{' enumerator_list  ',' '}' '''
+        p[0] = ir.Enumeration(identifier = p[2] , enumerator_list = p[3])
+        self._lexer.add_tag(p[2], p[0])
+        self._current_enumerator_value = 0
+
+    @debug_production
+    def p_enum_specifier2(self, p):
+        '''enum_specifier : ENUM IDENTIFIER '''
+        p[0] = ir.Enumeration(identifier = p[2])
+        self._lexer.add_tag(p[2], p[0])
 
     @debug_production
     def p_enumerator_list(self, p):
@@ -444,10 +472,16 @@ class C99Parser(object):
     def p_enumerator(self, p):
         '''enumerator : IDENTIFIER
                       | IDENTIFIER '=' constant_expression '''
-        if len(p) == 2:
-            p[0] = p[1]
-        else:
-            p[0] = p[1], p[3]
+        if len(p) == 4:
+            if not self._current_enumerator_value == p[3]:
+                self._current_enumerator_value = p[3]
+            else:
+                raise Exception(f'Enumerator value for {p[1]} already defined.')
+
+        p[0] = p[1], self._current_enumerator_value 
+        if not self._lexer.add_symbol(p[1], self._current_enumerator_value):
+            raise Exception(f'Enumerator {p[1]} has been defined twice.')
+        self._current_enumerator_value += 1
 
     @debug_production
     def p_function_specifier(self, p):
@@ -524,7 +558,11 @@ class C99Parser(object):
     def p_parameter_type_list(self, p):
         '''parameter_type_list : parameter_list
                                | parameter_list ',' ELLIPSIS'''
-        pass
+        if len(p) == 2:
+            p[0] = p[1]
+        else:
+            p[0] = p[1]
+            p[0].append(p[3])
 
     @debug_production
     def p_parameter_list(self, p):
@@ -557,7 +595,10 @@ class C99Parser(object):
     def p_type_name(self, p):
         '''type_name : specifier_qualifier_list
                      | specifier_qualifier_list abstract_declarator '''
-        pass
+        if len(p) == 2:
+            p[0] = p[1]
+        else:
+            p[0] = p[1], p[2] 
 
     @debug_production
     def p_abstract_declarator(self, p):
@@ -617,7 +658,11 @@ class C99Parser(object):
     def p_designator_list(self, p):
         '''designator_list : designator
                            | designator_list designator '''
-        pass
+        if len(p) == 2:
+            p[0] = [p[1]]
+        else:
+            p[1].append(p[2])
+            p[0] = p[1]
 
     @debug_production
     def p_designator(self, p):
@@ -646,13 +691,10 @@ class C99Parser(object):
     def p_compound_statement(self, p):
         '''compound_statement : '{' '}'
                               | '{' block_item_list '}' '''
-        pass
-        # if len(p) == 3:
-        #     p[0] = []
-        # elif len(p) == 4:
-        #     p[0] = p[2]
-        # else:
-        #     p[0] = [p[2], p[3]]
+        if len(p) == 3:
+            p[0] = []
+        elif len(p) == 4:
+            p[0] = p[2]
 
     @debug_production
     def p_block_item_list(self, p):
@@ -680,7 +722,8 @@ class C99Parser(object):
     def p_expression_statement(self, p):
         '''expression_statement : ';'
                                 | expression ';' '''
-        pass
+        if len(p) == 3:
+            p[0] = p[1]
 
     @debug_production
     def p_selection_statement(self, p):
@@ -732,7 +775,7 @@ class C99Parser(object):
 if __name__ == "__main__":
     parser = C99Parser(debug = True)
 
-    with open("examples/fat32.h", "rt") as include_file:
+    with open("output/directive.i", "rt") as include_file:
         data = include_file.read()
 
     parser.parse(data)

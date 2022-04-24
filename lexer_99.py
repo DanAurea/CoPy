@@ -1,11 +1,5 @@
+from cregex import *
 import ply.lex as lex
-
-LETTER = r"[a-zA-Z]"
-DIGIT = r"[0-9]"
-LETTER_DIGIT = r"[a-zA-Z-0-9]"
-E = f"""[Ee][+-]?{DIGIT}+"""
-FLOAT_SUFFIX = r"[fF]"
-INT_SUFFIX = r"[uU]"
 
 class C99Lexer(object):
     """
@@ -58,8 +52,6 @@ class C99Lexer(object):
     # working.
     tokens = list(reserved.values()) + \
             [
-                "COMMENT",
-
                 "TYPEDEF_NAME",
                 
                 "IDENTIFIER",
@@ -122,8 +114,62 @@ class C99Lexer(object):
     t_NE_OP = r'!='
 
     def __init__(self, **kwargs):
-        self._lexer        = lex.lex(module = self, **kwargs)
-        self._symbol_table = {}
+        self._lexer           = lex.lex(module = self, **kwargs)
+        self._symbol_table    = {}
+        self._tag_table       = {}
+        self._user_type_table = {}
+
+    def add_tag(self, tag, obj):
+        """
+        Adds a tag.
+        
+        :param      tag:  The tag
+        :type       tag:  { type_description }
+        :param      obj:  The object
+        :type       obj:  { type_description }
+        """
+        if tag not in self._tag_table:
+            self._tag_table[tag] = obj
+            return True
+        else:
+            return False
+
+    def tag_exist(self, tag):
+        return tag in self._tag_table
+
+    def get_tag(self, tag):
+        return self._tag_table[tag]
+
+    def add_symbol(self, symbol, value):
+        """
+        Adds a symbol to the internal symbol table
+        to follow redefinition.
+        
+        :param      symbol:  The symbol
+        :type       symbol:  { type_description }
+        :param      value:   The value
+        :type       value:   { type_description }
+        """
+        # We need to value because lexer will first see a symbol as identifier so in case we list enumerators
+        # to avoid raising exception because of enumerator redefinition we do this check.
+        if (symbol not in self._symbol_table):
+            self._symbol_table[symbol] = value
+            return True
+        else:
+            return False
+
+    def add_type(self, name, value):
+        """
+        Adds a type.
+        
+        :param      name:  The name
+        :type       name:  { type_description }
+        """
+        if (name not in self._user_type_table):
+            self._user_type_table[name] = value
+            return True
+        else:
+            return False
 
     def t_IDENTIFIER(self, t):
         r'[a-zA-Z_][a-zA-Z_0-9]*'
@@ -132,36 +178,90 @@ class C99Lexer(object):
         if t.value in self.reserved:
             t.type = self.reserved[t.value] 
         else:
-            if t.value not in self._symbol_table:
-                self._symbol_table[t.value] = {"type": "IDENTIFIER", "value": None}
+            if t.value in self._user_type_table:
+                t.type = "TYPEDEF_NAME"
 
-            t.type = self._symbol_table[t.value]["type"]
         return t
 
     def t_STRING_LITERAL(self, t):
         r'L?"(\\.|[^\\\"])*"'
         return t
 
-    CONSTANT_RE = "|".join([
-                                f"""{DIGIT}+{E}{FLOAT_SUFFIX}?""",
-                                f"""{DIGIT}*\.{DIGIT}+({E})?{FLOAT_SUFFIX}?""",
-                                f"""{DIGIT}+\.{DIGIT}*({E})?{FLOAT_SUFFIX}?""",
-                                f"""0[xX]{LETTER_DIGIT}+{INT_SUFFIX}?""",
-                                f"""0{DIGIT}+{INT_SUFFIX}?""",
-                                f"""{DIGIT}+{INT_SUFFIX}?""",
-                                f"""L?'(\\.|[^\\'])+'""",
-                            ])
+    FLOAT_RE = fr'({DIGIT}+{E}|{DIGIT}*\.{DIGIT}+({E})?|{DIGIT}+\.{DIGIT}*({E})?)(?P<float_suffix>{FLOAT_SUFFIX})?'
+    @lex.TOKEN(FLOAT_RE)
+    def t_FLOAT(self, t):
+        # Float values are constant but defined as a single rule
+        # to allow easier conversion from Python str to float.
+        
+        # TODO: Handle suffix
+        # PLY mix all token regexes into a single big regex with captured group
+        # so we can't rely on group position. So we are defining named group to ease
+        # trimming of suffixes.
+        # 
+        # We are testing all named suffixes for float because Python doesn't allow reuse
+        # of same name.
+        suffix = t.lexer.lexmatch.group('float_suffix')
+        t.value = float(t.value.rstrip(suffix))
+        t.type  = "CONSTANT"
+        return t    
     
-    @lex.TOKEN(CONSTANT_RE)
-    def t_CONSTANT(self, t):
-        # Data types are not handled because Python
-        # doesn't embed a way to differentiate
-        # signed and unsigned, this can be done on
-        # post process with intermediate code generation.
+    HEX_RE = fr'0[xX]{HEX_DIGIT}+(?P<hex_suffix>{INT_SUFFIX})?'
+    @lex.TOKEN(HEX_RE)
+    def t_HEX(self, t):
+        # Hex values are constant but defined as a single rule
+        # to allow easier conversion from Python str to hex.
+        
+        # TODO: Handle suffix
+        # PLY mix all token regexes into a single big regex with captured group
+        # so we can't rely on group position. So we are defining named group to ease
+        # trimming of suffixes.
+        suffix = t.lexer.lexmatch.group('hex_suffix')
+        t.value = int(t.value.rstrip(suffix), base = 16)
+        t.type = "CONSTANT"
         return t
 
+    # DIGIT is not limited to [0-7] to avoid ambiguity between integer base 8 or 10.
+    OCT_RE = fr'0{DIGIT}+(?P<oct_suffix>{INT_SUFFIX})?'
+    @lex.TOKEN(OCT_RE)
+    def t_OCTAL(self, t):
+        # Octal values are constant but defined as a single rule
+        # to allow easier conversion from Python str to octal.
+        
+        # TODO: Handle suffix
+        # PLY mix all token regexes into a single big regex with captured group
+        # so we can't rely on group position. So we are defining named group to ease
+        # trimming of suffixes.
+        suffix = t.lexer.lexmatch.group('oct_suffix')
+
+        t.value = int(t.value.rstrip(suffix), base = 8)
+        t.type = "CONSTANT"
+        return t
+
+    INTEGER_RE = fr'{DIGIT}+(?P<int_suffix>{INT_SUFFIX})?'
+    @lex.TOKEN(INTEGER_RE)
+    def t_INTEGER(self, t):
+        # Integer values are constant but defined as a single rule
+        # to allow easier conversion from Python str to int. 
+
+        # TODO: Handle suffix
+        # PLY mix all token regexes into a single big regex with captured group
+        # so we can't rely on group position. So we are defining named group to ease
+        # trimming of suffixes.
+        suffix = t.lexer.lexmatch.group('int_suffix')
+        t.value = int(t.value.rstrip(suffix))
+        t.type = "CONSTANT"
+        return t
+
+    def t_LITERAL(self, t):
+        # Literal values are constant but defined as a single rule
+        # to allow easier conversion from Python str to char.
+        r'L?\'(\\.|[^\'])+\''
+        t.value = ord(t.value)
+        t.type = "CONSTANT"
+        return t
+
+    @lex.TOKEN(COMMENT_RE)
     def t_COMMENT(self, t):
-        r'\/\*[\s\S]*?\*\/+|//.*'
         # Comments should be stored into a data structure based on header files and then restored during code generation
         pass
 
@@ -197,7 +297,7 @@ class C99Lexer(object):
 if __name__ == "__main__":
     lexer = C99Lexer()
 
-    with open("examples/example.h", "rt") as file:
+    with open("output/directive.i", "rt") as file:
         data = file.read()
 
     token_list = lexer.tokenize(data)

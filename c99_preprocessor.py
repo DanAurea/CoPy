@@ -1,3 +1,4 @@
+from cregex import *
 from pathlib import Path
 from utils import debug_production
 
@@ -7,15 +8,6 @@ import ply.yacc as yacc
 import re
 import time
 
-LETTER       = r"[a-zA-Z]"
-DIGIT        = r"[0-9]"
-LETTER_DIGIT = r"[a-zA-Z-0-9]"
-HEX_DIGIT    = r"[a-fA-F-0-9]"
-E            = f"""[Ee][+-]?{DIGIT}+"""
-FLOAT_SUFFIX = r"[fFlL]+"
-INT_SUFFIX   = r"[uUlL]+"
-
-COMMENT_RE = re.compile(r'\/\*[\s\S]*?\*\/+|//.*')
 
 class C99PreProcessorLexer(object):
     """
@@ -188,7 +180,7 @@ class C99PreProcessorLexer(object):
     @lex.TOKEN(HEX_RE)
     def t_HEX(self, t):
         # Hex values are constant but defined as a single rule
-        # to allow easier conversion from Python str to float.
+        # to allow easier conversion from Python str to hex.
         
         # TODO: Handle suffix
         # PLY mix all token regexes into a single big regex with captured group
@@ -204,7 +196,7 @@ class C99PreProcessorLexer(object):
     @lex.TOKEN(OCT_RE)
     def t_OCTAL(self, t):
         # Octal values are constant but defined as a single rule
-        # to allow easier conversion from Python str to float.
+        # to allow easier conversion from Python str to octal.
         
         # TODO: Handle suffix
         # PLY mix all token regexes into a single big regex with captured group
@@ -220,7 +212,7 @@ class C99PreProcessorLexer(object):
     @lex.TOKEN(INTEGER_RE)
     def t_INTEGER(self, t):
         # Integer values are constant but defined as a single rule
-        # to allow easier conversion from Python str to float. 
+        # to allow easier conversion from Python str to int. 
 
         # TODO: Handle suffix
         # PLY mix all token regexes into a single big regex with captured group
@@ -233,8 +225,9 @@ class C99PreProcessorLexer(object):
 
     def t_LITERAL(self, t):
         # Literal values are constant but defined as a single rule
-        # to allow easier conversion from Python str to float.
+        # to allow easier conversion from Python str to char.
         r'L?\'(\\.|[^\'])+\''
+        t.value = ord(t.value)
         t.type = "CONSTANT"
         return t
  
@@ -288,7 +281,7 @@ class C99PreProcessorLexer(object):
 
 class C99PreProcessor(object):
 
-    def __init__(self, stdlib_path = [], keep_comment = True, debug = False, **kwargs):
+    def __init__(self, stdlib_path = [], keep_comment = False, debug = False, **kwargs):
         self._current_file = Path()
         
         self._lexer = C99PreProcessorLexer()
@@ -1227,6 +1220,7 @@ class C99PreProcessor(object):
 if __name__ == "__main__":
     pre_processor = C99PreProcessor(debug = False, keep_comment = False)
 
-    preprocessed_code = pre_processor.process("examples/digraph_trigraph/directive.c")
+    preprocessed_code = pre_processor.process("examples/digraph_trigraph/directive.h")
 
-    print(preprocessed_code)
+    with open("output/directive.i" , "wt") as preprocessed_file:
+        preprocessed_file.write(preprocessed_code)
