@@ -115,20 +115,36 @@ class C99Lexer(object):
 
     def __init__(self, **kwargs):
         self._lexer           = lex.lex(module = self, **kwargs)
+        
         self._symbol_table    = {}
         self._tag_table       = {}
-        self._user_type_table = {}
+        self._label_table     = {}
 
-    def add_tag(self, tag, obj):
+    def add_label(self, label, obj):
+        """
+        Adds a label.
+        
+        :param      label:  The label
+        :type       label:  str
+        :param      label:  The label intermediate representation
+        :type       label:  Label
+        """
+        if label not in self._label_table:
+            self._label_table[label] = obj
+            return True
+        else:
+            return False
+
+    def add_tag(self, tag, obj, update = False):
         """
         Adds a tag.
         
         :param      tag:  The tag
-        :type       tag:  { type_description }
-        :param      obj:  The object
-        :type       obj:  { type_description }
+        :type       tag:  str
+        :param      obj:  The enum/struct/union object
+        :type       obj:  Enum|Struct|Union
         """
-        if tag not in self._tag_table:
+        if tag not in self._tag_table or (tag in self._tag_table and update == True):
             self._tag_table[tag] = obj
             return True
         else:
@@ -158,19 +174,6 @@ class C99Lexer(object):
         else:
             return False
 
-    def add_type(self, name, value):
-        """
-        Adds a type.
-        
-        :param      name:  The name
-        :type       name:  { type_description }
-        """
-        if (name not in self._user_type_table):
-            self._user_type_table[name] = value
-            return True
-        else:
-            return False
-
     def t_IDENTIFIER(self, t):
         r'[a-zA-Z_][a-zA-Z_0-9]*'
 
@@ -178,7 +181,7 @@ class C99Lexer(object):
         if t.value in self.reserved:
             t.type = self.reserved[t.value] 
         else:
-            if t.value in self._user_type_table:
+            if t.value in self._symbol_table:
                 t.type = "TYPEDEF_NAME"
 
         return t
@@ -220,8 +223,7 @@ class C99Lexer(object):
         t.type = "CONSTANT"
         return t
 
-    # DIGIT is not limited to [0-7] to avoid ambiguity between integer base 8 or 10.
-    OCT_RE = fr'0{DIGIT}+(?P<oct_suffix>{INT_SUFFIX})?'
+    OCT_RE = fr'0{OCT_DIGIT}+(?P<oct_suffix>{INT_SUFFIX})?'
     @lex.TOKEN(OCT_RE)
     def t_OCTAL(self, t):
         # Octal values are constant but defined as a single rule

@@ -26,6 +26,23 @@ class C99Parser(object):
     def p_translation_unit(self, p):
         '''translation_unit : external_declaration 
                             | translation_unit external_declaration'''
+        if len(p) == 2:
+            p[0] = ir.SourceFile()
+        else:
+            p[1].append(p[2])
+            p[0] = p[1]
+
+    @debug_production
+    def p_external_declaration(self, p):
+        '''external_declaration : function_definition
+                                | declaration '''
+        p[0] = p[1]
+
+    @debug_production
+    def p_function_definition(self, p):
+        '''function_definition : declaration_specifiers declarator declaration_list compound_statement
+                                | declaration_specifiers declarator compound_statement'''
+        function = ir.Function()
 
     @debug_production
     def p_primary_expression(self, p):
@@ -277,10 +294,10 @@ class C99Parser(object):
             if type(p[1]) == list and p[1][0] == "typedef":
                 alias_list = p[2]
                 typedef = p[1][1]
-
+                
                 for alias in alias_list:
-                    typedef.identifier = alias
-                    self._lexer.add_type(alias, typedef)
+                    typedef.identifier = alias[0]
+                    self._lexer.add_symbol(alias, typedef)
             elif type(p[1]) in [ir.Enumeration, ir.Struct, ir.Union]:
                 if p[1].is_incomplete():
                     if not self._lexer.tag_exist(p[1].identifier):
@@ -299,11 +316,13 @@ class C99Parser(object):
                                   | function_specifier
                                   | function_specifier declaration_specifiers'''
         #TODO: Handle different rules (type qualifier/specifier, storage)
-
         if len(p) == 2:
-            p[0] = p[1]
+            p[0] = [p[1],]
         elif len(p) == 3:
-            p[0] = p[1], p[2]
+            # Because the production rule is a bit different (right sided recursivity) than other production rule
+            # we handle concatenation differently.
+            p[0] = [p[1],]
+            p[0].extend(p[2])
 
     @debug_production
     def p_init_declarator_list(self, p):
@@ -358,28 +377,28 @@ class C99Parser(object):
                                      | struct_or_union IDENTIFIER '{' struct_declaration_list '}'
                                      | struct_or_union IDENTIFIER '''
         if p[1] == 'struct':
-            if len(p) == 5:
-                struct = ir.Struct(identifier = '', declaration_list = p[3])
-            elif len(p) == 6:
-                struct = ir.Struct(identifier = '', declaration_list = p[4])
-                self._lexer.add_tag(p[2], struct)
-            else:
-                # We don't know yet if it's a forward declaration or a type specifier.
-                struct = ir.Struct(identifier = '')
-                # We don't know yet if it's a forward declaration or a type specifier so return value is not checked
-                self._lexer.add_tag(p[2], struct)
-            p[0] = struct
+            specifier = ir.Struct(identifier = '')
         elif p[1] == 'union':
-            if len(p) == 5:
-                union = ir.Union(identifier = '', declaration_list = p[3])
-            elif len(p) == 6:
-                union = ir.Union(identifier = '', declaration_list = p[4])
-                self._lexer.add_tag(p[2], union)
+            specifier = ir.Union(identifier = '')
+
+        if len(p) == 5:
+            specifier.declaration_list = p[3]
+        elif len(p) == 6:
+            specifier.declaration_list = p[4]
+
+            if not self._lexer.tag_exist(p[2]):
+                self._lexer.add_tag(p[2], specifier) 
+            elif self._lexer.get_tag(p[2]).is_incomplete():
+                # The struct was incomplete and we now have its description so we update it
+                self._lexer.add_tag(p[2], specifier, update = True)
             else:
-                union = ir.Union(identifier = '')
-                # We don't know yet if it's a forward declaration or a type specifier so return value is not checked
-                self._lexer.add_tag(p[2], struct)
-            p[0] = union
+                raise Exception(f'{p[2]} is redefined.')
+        else:
+            # This is used mostly for forward declaration and it's legal to redefine it
+            # if tag is already completed then nothing will happens.
+            self._lexer.add_tag(p[2], specifier)
+
+        p[0] = specifier
 
     @debug_production
     def p_struct_or_union(self, p):
@@ -403,17 +422,16 @@ class C99Parser(object):
         p[0] = ir.StructDeclaration(p[1], p[2])
 
     @debug_production
-    # TODO: Handle error whenever type is a typedef not yet declared. (Ambiguity with IDENTIFIER otherwise)
     def p_specifier_qualifier_list(self, p):
         '''specifier_qualifier_list : type_specifier
                                     | type_specifier specifier_qualifier_list
                                     | type_qualifier 
                                     | type_qualifier specifier_qualifier_list'''
-        if len(p) == 3:
+        if len(p) == 2:
             p[0] = [p[1],]
-            p[0].extend(p[2])
         else:
             p[0] = [p[1],]
+            p[0].extend(p[2])
 
     @debug_production
     def p_struct_declarator_list(self, p):
@@ -448,14 +466,25 @@ class C99Parser(object):
     def p_enum_specifier2(self, p):
         '''enum_specifier : ENUM IDENTIFIER '{' enumerator_list '}'
                           | ENUM IDENTIFIER '{' enumerator_list  ',' '}' '''
-        p[0] = ir.Enumeration(identifier = p[2] , enumerator_list = p[3])
-        self._lexer.add_tag(p[2], p[0])
+        specifier = ir.Enumeration(identifier = p[2] , enumerator_list = p[4])
+        
+        if not self._lexer.tag_exist(p[2]):
+            self._lexer.add_tag(p[2], specifier) 
+        elif self._lexer.get_tag(p[2]).is_incomplete():
+            # The struct was incomplete and we now have its description so we update it
+            self._lexer.add_tag(p[2], specifier, update = True)
+        else:
+            raise Exception(f'{p[2]} is redefined.')
+        
         self._current_enumerator_value = 0
+        p[0] = specifier
 
     @debug_production
-    def p_enum_specifier2(self, p):
+    def p_enum_specifier3(self, p):
         '''enum_specifier : ENUM IDENTIFIER '''
         p[0] = ir.Enumeration(identifier = p[2])
+        # This is used mostly for forward declaration and it's legal to redefine it
+        # if tag is already completed then nothing will happens.
         self._lexer.add_tag(p[2], p[0])
 
     @debug_production
@@ -473,15 +502,15 @@ class C99Parser(object):
         '''enumerator : IDENTIFIER
                       | IDENTIFIER '=' constant_expression '''
         if len(p) == 4:
-            if not self._current_enumerator_value == p[3]:
-                self._current_enumerator_value = p[3]
-            else:
-                raise Exception(f'Enumerator value for {p[1]} already defined.')
-
-        p[0] = p[1], self._current_enumerator_value 
+            # Enumerator value can be redefined twice so no check            
+            self._current_enumerator_value = p[3]
+            
         if not self._lexer.add_symbol(p[1], self._current_enumerator_value):
             raise Exception(f'Enumerator {p[1]} has been defined twice.')
+
         self._current_enumerator_value += 1
+
+        p[0] = (p[1], self._current_enumerator_value,)
 
     @debug_production
     def p_function_specifier(self, p):
@@ -632,10 +661,14 @@ class C99Parser(object):
 
     @debug_production
     def p_initializer(self, p):
-        '''initializer : assignment_expression
-                       | '{' initializer_list '}'
+        '''initializer : assignment_expression'''
+        p[0] = p[1]
+
+    @debug_production
+    def p_initializer2(self, p):
+        '''initializer : '{' initializer_list '}'
                        | '{' initializer_list ',' '}' '''
-        pass
+        p[0] = p[2]
 
     @debug_production
     def p_initializer_list(self, p):
@@ -652,7 +685,7 @@ class C99Parser(object):
     @debug_production
     def p_designation(self, p):
         '''designation : designator_list '=' '''
-        pass
+        p[0] = p[1]
 
     @debug_production
     def p_designator_list(self, p):
@@ -700,13 +733,17 @@ class C99Parser(object):
     def p_block_item_list(self, p):
         '''block_item_list : block_item
                            | block_item_list block_item '''
-        pass
+        if len(p) == 2:
+            p[0] = [p[1]]
+        else:
+            p[1].append(p[2])
+            p[0] = p[1]
 
     @debug_production
     def p_block_item(self, p):
         '''block_item : declaration
                       | statement '''
-        pass
+        p[0] = p[1]
 
     @debug_production
     def p_declaration_list(self, p):
@@ -748,18 +785,6 @@ class C99Parser(object):
                           | RETURN ';'
                           | RETURN expression ';' '''
         pass
-
-    @debug_production
-    def p_external_declaration(self, p):
-        '''external_declaration : function_definition
-                                | declaration '''
-        p[0] = p[1]
-
-    @debug_production
-    def p_function_definition(self, p):
-        '''function_definition : declaration_specifiers declarator declaration_list compound_statement
-                                | declaration_specifiers declarator compound_statement'''
-        function = ir.Function()
 
     def p_error(self, p):
         if p:

@@ -191,8 +191,7 @@ class C99PreProcessorLexer(object):
         t.type = "CONSTANT"
         return t
 
-    # DIGIT is not limited to [0-7] to avoid ambiguity between integer base 8 or 10.
-    OCT_RE = fr'0{DIGIT}+(?P<oct_suffix>{INT_SUFFIX})?'
+    OCT_RE = fr'0{OCT_DIGIT}+(?P<oct_suffix>{INT_SUFFIX})?'
     @lex.TOKEN(OCT_RE)
     def t_OCTAL(self, t):
         # Octal values are constant but defined as a single rule

@@ -1,8 +1,21 @@
+class SourceFile(object):
+
+    def __init__(self):
+        self.translation_unit_list = []
+
+    def append(self, translation_unit):
+        self.translation_unit_list.append(translation_unit)
+
+    # TODO: Uncomment once every translation unit will be handled
+    # def __repr__(self):
+    #     s = '\n'.join(self.translation_unit_list)
+    #     return s
+
 class Struct(object):
     """
     """
 
-    def __init__(self, identifier, declaration_list, packing = 4):
+    def __init__(self, identifier, declaration_list = [], packing = 4):
         self.identifier       = identifier
         self.declaration_list = declaration_list
         self.packing          = packing
@@ -22,7 +35,7 @@ class Union(object):
     """
     """
 
-    def __init__(self, identifier, declaration_list, packing = 4):
+    def __init__(self, identifier, declaration_list = [], packing = 4):
         self.identifier       = identifier
         self.declaration_list = declaration_list
         self.packing          = packing
