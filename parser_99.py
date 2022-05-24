@@ -290,8 +290,7 @@ class C99Parser(object):
         '''declaration : declaration_specifiers ';' 
                        | declaration_specifiers init_declarator_list ';' '''
         if len(p) == 4:
-            # TODO: Find how to get rid of type checking (that's a really bad design)
-            if type(p[1]) == list and p[1][0] == "typedef":
+            if p[1][0] == "typedef":
                 alias_list = p[2]
                 typedef = p[1][1]
                 
@@ -304,6 +303,8 @@ class C99Parser(object):
                         raise Exception(f'Tag {p[1].identifer} not found.')
                     else:
                         self._lexer.get_tag(p[1].identifier)      
+            
+        p[0] = p[1], p[2]
 
     @debug_production
     def p_declaration_specifiers(self, p):
@@ -323,6 +324,7 @@ class C99Parser(object):
             # we handle concatenation differently.
             p[0] = [p[1],]
             p[0].extend(p[2])
+            print(p[0])
 
     @debug_production
     def p_init_declarator_list(self, p):
@@ -724,10 +726,7 @@ class C99Parser(object):
     def p_compound_statement(self, p):
         '''compound_statement : '{' '}'
                               | '{' block_item_list '}' '''
-        if len(p) == 3:
-            p[0] = []
-        elif len(p) == 4:
-            p[0] = p[2]
+        p[0] = [p[2]] if len(p) == 4 else []
 
     @debug_production
     def p_block_item_list(self, p):
@@ -759,8 +758,7 @@ class C99Parser(object):
     def p_expression_statement(self, p):
         '''expression_statement : ';'
                                 | expression ';' '''
-        if len(p) == 3:
-            p[0] = p[1]
+        p[0] = [p[1]] if len(p) == 3 else [] 
 
     @debug_production
     def p_selection_statement(self, p):

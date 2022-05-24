@@ -16,20 +16,10 @@ class C99PreProcessorLexer(object):
 
     # Keywords
     reserved = {
-                    "#define" : "DEFINE",
-                    "defined" : "DEFINED",
-                    "#elif" : "ELIF",
-                    "#else" : "ELSE",
-                    "#endif" : "ENDIF",
-                    "#error" : "ERROR",
-                    "#if" : "IF",
-                    "#ifdef" : "IFDEF",
-                    "#ifndef" : "IFNDEF",
-                    "#include" : "INCLUDE",
-                    "#line" : "LINE",
-                    "#pragma" : "PRAGMA",
-                    "_Pragma" : "_PRAGMA",
-                    "#undef" : "UNDEF",
+                    "#define" : "DEFINE", "defined" : "DEFINED", "#elif" : "ELIF", "#else" : "ELSE",
+                    "#endif" : "ENDIF", "#error" : "ERROR", "#if" : "IF", "#ifdef" : "IFDEF",
+                    "#ifndef" : "IFNDEF", "#include" : "INCLUDE", "#line" : "LINE", "#pragma" : "PRAGMA",
+                    "_Pragma" : "_PRAGMA", "#undef" : "UNDEF",
             }
 
     # This class attribute should be set because ply
@@ -37,39 +27,16 @@ class C99PreProcessorLexer(object):
     # working.
     tokens = list(reserved.values()) + \
             [
-                "CONSTANT",
-                "HEADER_NAME",
-                "DIRECTIVE",
-                "IDENTIFIER",
-                "STRING_LITERAL",
-
-                "NEWLINE",
+                "CONSTANT", "HEADER_NAME", "DIRECTIVE", "IDENTIFIER", 
+                "STRING_LITERAL", "NEWLINE",
 
                 # Operators
-                "ELLIPSIS",
-                "LEFT_ASSIGN",
-                "RIGHT_ASSIGN",
-                "ADD_ASSIGN",
-                "SUB_ASSIGN",
-                "MUL_ASSIGN",
-                "DIV_ASSIGN",
-                "MOD_ASSIGN",
-                "AND_ASSIGN",
-                "XOR_ASSIGN",
-                "OR_ASSIGN",
-                "LEFT_OP",
-                "RIGHT_OP",
-                "INC_OP",
-                "DEC_OP",
-                "PTR_OP",
-                "AND_OP",
-                "OR_OP",
-                "LE_OP",
-                "GE_OP",
-                "EQ_OP",
-                "NE_OP",
-                "HASH_HASH",
-                "LPAREN",
+                "ELLIPSIS", "LEFT_ASSIGN", "RIGHT_ASSIGN", "ADD_ASSIGN",
+                "SUB_ASSIGN", "MUL_ASSIGN", "DIV_ASSIGN", "MOD_ASSIGN",
+                "AND_ASSIGN", "XOR_ASSIGN", "OR_ASSIGN", "LEFT_OP",
+                "RIGHT_OP", "INC_OP", "DEC_OP", "PTR_OP",
+                "AND_OP", "OR_OP", "LE_OP", "GE_OP",
+                "EQ_OP", "NE_OP", "HASH_HASH", "LPAREN",
             ]
 
     literals = [ ';', '{', '}', ',', ':', '=', '(', ')', '[', ']', '.', '&', '!',
