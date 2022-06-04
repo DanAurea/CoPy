@@ -7,9 +7,9 @@ class SourceFile(object):
         self.translation_unit_list.append(translation_unit)
 
     # TODO: Uncomment once every translation unit will be handled
-    # def __repr__(self):
-    #     s = '\n'.join(self.translation_unit_list)
-    #     return s
+    def __repr__(self):
+        s = f'''{(self.translation_unit_list)}'''
+        return s
 
 class Struct(object):
     """
@@ -20,7 +20,7 @@ class Struct(object):
         self.packing          = packing
 
     def is_incomplete(self):
-        return not len(self.declaration_list_list)
+        return not len(self.declaration_list)
 
     def __repr__(self):
         s = f'''
@@ -216,6 +216,9 @@ class Declaration(object):
         :type       init_declarator:  str
         """
         self.init_declarator_list.append(init_declarator)
+
+    def __str__(self):
+        return self.__repr__()
 
     def __repr__(self):
         s = f'''

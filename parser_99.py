@@ -31,9 +31,10 @@ class C99Parser(object):
                             | translation_unit external_declaration'''
         if len(p) == 2:
             p[0] = ir.SourceFile()
+            p[0].append(p[1])
         else:
-            p[1].append(p[2])
             p[0] = p[1]
+            p[0].append(p[2])
 
     @debug_production
     def p_external_declaration(self, p):
@@ -319,12 +320,12 @@ class C99Parser(object):
                                   | function_specifier
                                   | function_specifier declaration_specifiers'''
         if len(p) == 2:
-            p[0] = p[1]
+            p[0] = [p[1],]
         elif len(p) == 3:
             # Because the production rule is a bit different (right sided recursivity) than other production rule
             # we handle concatenation differently.
             p[0] = [p[1],]
-            p[0].append(p[2])
+            p[0].extend(p[2])
 
     @debug_production
     def p_init_declarator_list(self, p):
@@ -379,9 +380,9 @@ class C99Parser(object):
                                      | struct_or_union IDENTIFIER '{' struct_declaration_list '}'
                                      | struct_or_union IDENTIFIER '''
         if p[1] == 'struct':
-            specifier = ir.Struct(identifier = '')
+            specifier = ir.Struct()
         elif p[1] == 'union':
-            specifier = ir.Union(identifier = '')
+            specifier = ir.Union()
 
         if len(p) == 5:
             specifier.declaration_list = p[3]
