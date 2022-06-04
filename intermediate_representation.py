@@ -58,7 +58,7 @@ class StructDeclaration(object):
     def __repr__(self):
         new_line = '\n' 
         s = f'''
-                {" ".join(self.specifier_qualifier_list)} {self.struct_declarator_list[:]};
+                {" ".join(self.specifier_qualifier_list)} {str(self.struct_declarator_list)[1:-1]};
             '''
         return s
 
@@ -86,7 +86,12 @@ class Enumeration(object):
                 Packing : {self.packing}'''
         return s
 
-class Function(object):
+class FunctionDefinition(object):
+    
+    def __init__(self):
+        pass
+
+class FunctionDeclarator(object):
     
     def __init__(self):
         pass
@@ -168,32 +173,15 @@ class Declaration(object):
         if specifier == None:
             return
 
-        if "auto" == specifier:
-            self.is_auto     = True
-        
-        if "const" == specifier:
-            self.is_const    = True
-        
-        if "extern" == specifier:
-            self.is_extern   = True
-        
-        if "inline" == specifier:
-            self.is_inline   = True
-        
-        if "register" == specifier:
-            self.is_register = True
-        
-        if "restrict" == specifier:
-            self.is_restrict = True
-        
-        if "static" == specifier:
-            self.is_static   = True
-        
-        if "typedef" == specifier:
-            self.is_typedef  = True
-
-        if "volatile" == specifier:
-            self.is_volatile = True
+        self.is_auto     = self.is_auto or "auto" == specifier
+        self.is_const    = self.is_const or "const" == specifier
+        self.is_extern   = self.is_extern or "extern" == specifier
+        self.is_inline   = self.is_inline or "inline" == specifier
+        self.is_register = self.is_register or "register" == specifier
+        self.is_restrict = self.is_restrict or "restrict" == specifier
+        self.is_static   = self.is_static or "static" == specifier
+        self.is_typedef  = self.is_typedef or "typedef" == specifier
+        self.is_volatile = self.is_volatile or "volatile" == specifier
 
         self.specifier_list.append(specifier)
 
@@ -223,5 +211,31 @@ class Declaration(object):
     def __repr__(self):
         s = f'''
             {self.specifier_list} {self.init_declarator_list};
+            '''
+        return s
+
+class ArrayDeclarator(object):
+
+    def __init__(self, direct_declarator = None, length = None):
+        self.direct_declarator = direct_declarator
+        self.length            = length
+
+    def __repr__(self):
+        s = f'''{self.direct_declarator}[{self.length}]'''
+        return s
+
+class Pointer(object):
+
+    def __init__(self, direct_declarator = None, reference = None, type_qualifier_list = []):
+        self.reference           = reference
+        self.type_qualifier_list = type_qualifier_list
+        self.direct_declarator   = direct_declarator
+
+    def __repr__(self):
+        s = f'''
+            type_qualifier_list : {self.type_qualifier_list}
+            reference : 
+                {self.reference}
+            direct_declarator : {self.direct_declarator}
             '''
         return s

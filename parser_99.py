@@ -46,7 +46,7 @@ class C99Parser(object):
     def p_function_definition(self, p):
         '''function_definition : declaration_specifiers declarator declaration_list compound_statement
                                 | declaration_specifiers declarator compound_statement'''
-        function = ir.Function()
+        function = ir.FunctionDefinition()
 
     @debug_production
     def p_primary_expression(self, p):
@@ -454,7 +454,7 @@ class C99Parser(object):
         if len(p) == 2:
             p[0] = ir.StructDeclarator(declarator = p[1])
         elif len(p) == 3:
-            p[0] = ir.StructDeclarator(bitfield = p[3])
+            p[0] = ir.StructDeclarator(bitfield = p[2])
         else:
             p[0] = ir.StructDeclarator(declarator = p[1], bitfield = p[3])
 
@@ -531,11 +531,10 @@ class C99Parser(object):
         '''declarator : direct_declarator
                       | pointer direct_declarator '''
         # Return only direct declarator
-        if len(p) == 2:
-            p[0] = p[1]
-        else:
-            # TODO : Handle pointer case
-            pass
+        p[0] = p[1]
+    
+        if len(p) == 3:
+            p[0].direct_declarator = p[2]
 
     @debug_production
     def p_direct_declarator1(self, p):
@@ -553,20 +552,20 @@ class C99Parser(object):
                              | direct_declarator '[' type_qualifier_list ']'
                              | direct_declarator '[' type_qualifier_list assignment_expression ']'
                              | direct_declarator '[' assignment_expression ']' '''
-        pass
+        p[0] = ir.ArrayDeclarator(p[1], p[3])
 
     @debug_production
     def p_direct_declarator4(self, p):
         '''direct_declarator : direct_declarator '[' STATIC assignment_expression ']'
                              | direct_declarator '[' STATIC type_qualifier_list assignment_expression ']'
                              | direct_declarator '[' type_qualifier_list STATIC assignment_expression ']' '''
-        pass
+        p[0] = ir.ArrayDeclarator(p[1], p[3])
 
     @debug_production
     def p_direct_declarator5(self, p):
         '''direct_declarator : direct_declarator '[' '*' ']'
                              | direct_declarator '[' type_qualifier_list '*' ']' '''
-        pass
+        p[0] = ir.ArrayDeclarator(p[1], p[3])
 
     @debug_production
     def p_direct_declarator6(self, p):
@@ -574,19 +573,20 @@ class C99Parser(object):
                              | direct_declarator '(' parameter_type_list ')'
                              | direct_declarator '(' identifier_list ')'
                              '''
-        """
-        Function declaration
-        """
-        pass
+        p[0] = FunctionDeclarator()
 
     @debug_production
-    def p_pointer(self, p):
+    def p_pointer1(self, p):
         '''pointer : '*'
-                   | '*' type_qualifier_list
-                   | '*' pointer
-                   | '*' type_qualifier_list pointer '''
-        pass
+                   | '*' pointer ''' 
+        p[0] = ir.Pointer(reference = p[2] if len(p) == 3 else None)
 
+    @debug_production
+    def p_pointer2(self, p):
+        '''pointer : '*' type_qualifier_list
+                   | '*' type_qualifier_list pointer ''' 
+        p[0] = ir.Pointer(reference = p[3] if len(p) == 4 else None, type_qualifier_list = p[2])
+    
     @debug_production
     def p_type_qualifier_list(self, p):
         '''type_qualifier_list : type_qualifier
@@ -828,7 +828,7 @@ class C99Parser(object):
             print("Reach EOF")
 
     def parse(self, data):
-        self._parser.parse(data)
+        return self._parser.parse(data)
 
 if __name__ == "__main__":
     parser = C99Parser(debug = True)
@@ -836,4 +836,4 @@ if __name__ == "__main__":
     with open("output/directive.i", "rt") as include_file:
         data = include_file.read()
 
-    parser.parse(data)
+    print(parser.parse(data))
