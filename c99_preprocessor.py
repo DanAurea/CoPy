@@ -20,7 +20,7 @@ class C99PreProcessorLexer(object):
                     "#endif" : "ENDIF", "#error" : "ERROR", "#if" : "IF", "#ifdef" : "IFDEF",
                     "#ifndef" : "IFNDEF", "#include" : "INCLUDE", "#line" : "LINE", "#pragma" : "PRAGMA",
                     "_Pragma" : "_PRAGMA", "#undef" : "UNDEF",
-            }
+                }
 
     # This class attribute should be set because ply
     # is using Python introspection for its internal
@@ -39,9 +39,8 @@ class C99PreProcessorLexer(object):
                 "EQ_OP", "NE_OP", "HASH_HASH", "LPAREN",
             ]
 
-    literals = [ ';', '{', '}', ',', ':', '=', '(', ')', '[', ']', '.', '&', '!',
-                 '~', '-', '+', '*', '/', '%', '<', '>', '^', '|', '?', '"', '@', 
-                 '#']
+    literals = [ ';', '{', '}', ',', ':', '=', '(', ')', '[', ']', '.', '&', '!', '~',
+                 '-', '+', '*', '/', '%', '<', '>', '^', '|', '?', '"', '@', '#']
 
     # Skip whitespaces
     t_ignore = ' \t'
@@ -75,8 +74,8 @@ class C99PreProcessorLexer(object):
     t_HASH_HASH = r'\#\#'
 
     states = (
-        ('directive','inclusive'),
-    )
+                ('directive','inclusive'),
+             )
 
     def __init__(self, **kwargs):
         self._lexer    = lex.lex(module = self, reflags=re.UNICODE, **kwargs)
@@ -1068,10 +1067,7 @@ class C99PreProcessor(object):
             # Neither stdlib/relative path yield an existing file so we have to raise an error.
             raise FileNotFoundError(f'{header_path} doesn\'t resolve to an existing file.')
         else:
-            include_content = self.process(include_path, self._lexer._lexer.clone())
-
-        # Prevent appending of include content with next line in further parsing.
-        include_content += '\n'
+            include_content = f'{self.process(include_path, self._lexer._lexer.clone())}\n'
 
         # Add the preprocessed include inside the headers table so we can later output
         # contents inside intermediate files *.i or avoid reprocessing an already preprocessed

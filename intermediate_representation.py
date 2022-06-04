@@ -15,8 +15,7 @@ class Struct(object):
     """
     """
 
-    def __init__(self, identifier, declaration_list = [], packing = 4):
-        self.identifier       = identifier
+    def __init__(self, declaration_list = [], packing = 4):
         self.declaration_list = declaration_list
         self.packing          = packing
 
@@ -25,7 +24,6 @@ class Struct(object):
 
     def __repr__(self):
         s = f'''
-                Struct name: {self.identifier} 
                 Declaration list: {self.declaration_list} 
                 Packing: {self.packing} 
             '''
@@ -35,8 +33,7 @@ class Union(object):
     """
     """
 
-    def __init__(self, identifier, declaration_list = [], packing = 4):
-        self.identifier       = identifier
+    def __init__(self, declaration_list = [], packing = 4):
         self.declaration_list = declaration_list
         self.packing          = packing
 
@@ -45,7 +42,6 @@ class Union(object):
 
     def __repr__(self):
         s = f'''
-                Union name: {self.union_name} 
                 Declaration list: {self.declaration_list} 
                 Packing: {self.packing} 
             '''
@@ -78,8 +74,7 @@ class StructDeclarator(object):
 
 class Enumeration(object):
 
-    def __init__(self, identifier = None, enumerator_list = [], packing = 4):
-        self.identifier      = identifier
+    def __init__(self, enumerator_list = [], packing = 4):
         self.enumerator_list = enumerator_list
         self.packing         = packing
 
@@ -87,9 +82,7 @@ class Enumeration(object):
         return not len(self.enumerator_list)
 
     def __repr__(self):
-        s = f'''
-                Enumeration name: {self.identifier}
-                Enumerator list: {self.enumerator_list}
+        s = f'''Enumerator list: {self.enumerator_list}
                 Packing : {self.packing}'''
         return s
 
@@ -146,4 +139,86 @@ class Macro(object):
                 Replacement text: {self.replacement}
                 Argument list : {self.arg_list}
                 Variadic : {self.variadic}'''
+        return s
+
+class Declaration(object):
+    
+    def __init__(self):
+        self.init_declarator_list = []
+        self.specifier_list       = []
+        
+        self.is_auto              = False
+        self.is_const             = False
+        self.is_extern            = False
+        self.is_inline            = False
+        self.is_register          = False
+        self.is_restrict          = False
+        self.is_static            = False
+        self.is_typedef           = False
+        self.is_volatile          = False
+
+    def add_specifier(self, specifier):
+        """
+        Adds a specifier to declaration and update
+        internal member depending on specifier value.
+        
+        :param      specifier:  The specifier
+        :type       specifier:  str
+        """
+        if specifier == None:
+            return
+
+        if "auto" == specifier:
+            self.is_auto     = True
+        
+        if "const" == specifier:
+            self.is_const    = True
+        
+        if "extern" == specifier:
+            self.is_extern   = True
+        
+        if "inline" == specifier:
+            self.is_inline   = True
+        
+        if "register" == specifier:
+            self.is_register = True
+        
+        if "restrict" == specifier:
+            self.is_restrict = True
+        
+        if "static" == specifier:
+            self.is_static   = True
+        
+        if "typedef" == specifier:
+            self.is_typedef  = True
+
+        if "volatile" == specifier:
+            self.is_volatile = True
+
+        self.specifier_list.append(specifier)
+
+    def add_specifier_list(self, specifier_list):
+        """
+        Adds a specifier to declaration and update
+        internal member depending on specifier value.
+        
+        :param      specifier:  The specifier
+        :type       specifier:  str
+        """
+        for specifier in specifier_list:
+            self.add_specifier(specifier)
+
+    def add_init_declarator(self, init_declarator):
+        """
+        Adds an initialized declarator.
+        
+        :param      init_declarator:  The initialized declarator
+        :type       init_declarator:  str
+        """
+        self.init_declarator_list.append(init_declarator)
+
+    def __repr__(self):
+        s = f'''
+            {self.specifier_list} {self.init_declarator_list};
+            '''
         return s

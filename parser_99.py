@@ -1,3 +1,4 @@
+from collections import namedtuple
 from lexer_99 import C99Lexer
 from utils import debug_production
 
@@ -9,6 +10,8 @@ class C99Parser(object):
     Produce a parser that create an AST from C source/header files
     and will provide a compatible interface to Python ctypes library.
     """
+    Enumerator     = namedtuple('Enumerator', ['name', 'value'])
+    InitDeclarator = namedtuple('InitDeclarator', ['name', 'value'])
 
     def __init__(self, lexer = None, debug = False, **kwargs):
         if not lexer:
@@ -289,22 +292,21 @@ class C99Parser(object):
     def p_declaration(self, p):
         '''declaration : declaration_specifiers ';' 
                        | declaration_specifiers init_declarator_list ';' '''
-        if len(p) == 4:
-            if p[1][0] == "typedef":
-                alias_list = p[2]
-                typedef = p[1][1]
+        p[0] = ir.Declaration()
+        p[0].add_specifier_list(p[1])
                 
-                for alias in alias_list:
-                    typedef.identifier = alias[0]
-                    self._lexer.add_symbol(alias, typedef)
-            elif type(p[1]) in [ir.Enumeration, ir.Struct, ir.Union]:
-                if p[1].is_incomplete():
-                    if not self._lexer.tag_exist(p[1].identifier):
-                        raise Exception(f'Tag {p[1].identifer} not found.')
-                    else:
-                        self._lexer.get_tag(p[1].identifier)      
+        if len(p) == 4:
+            p[0].init_declarator_list = p[2]
             
-        p[0] = p[1], p[2]
+            if p[0].is_typedef:
+                init_declarator_list = p[2]
+                # When a typedef is encountered, last declaration specifier is always
+                # an enumeration, struct or union.
+                typedef_object = p[0].specifier_list[-1]
+
+                # init_declarator are always a tuple representing declarator name and its initial value
+                for init_declarator in init_declarator_list:
+                    self._lexer.add_symbol(init_declarator.name, typedef_object)
 
     @debug_production
     def p_declaration_specifiers(self, p):
@@ -316,15 +318,13 @@ class C99Parser(object):
                                   | type_qualifier declaration_specifiers
                                   | function_specifier
                                   | function_specifier declaration_specifiers'''
-        #TODO: Handle different rules (type qualifier/specifier, storage)
         if len(p) == 2:
-            p[0] = [p[1],]
+            p[0] = p[1]
         elif len(p) == 3:
             # Because the production rule is a bit different (right sided recursivity) than other production rule
             # we handle concatenation differently.
             p[0] = [p[1],]
-            p[0].extend(p[2])
-            print(p[0])
+            p[0].append(p[2])
 
     @debug_production
     def p_init_declarator_list(self, p):
@@ -341,9 +341,9 @@ class C99Parser(object):
         '''init_declarator : declarator
                            | declarator '=' initializer '''
         if len(p) == 2:
-            p[0] = (p[1],)
+            p[0] = self.InitDeclarator(p[1], None)
         else:
-            p[0] = (p[1], p[3])
+            p[0] = self.InitDeclarator(p[1], p[3])
 
     @debug_production
     def p_storage_class_specifier(self, p):
@@ -510,9 +510,8 @@ class C99Parser(object):
         if not self._lexer.add_symbol(p[1], self._current_enumerator_value):
             raise Exception(f'Enumerator {p[1]} has been defined twice.')
 
+        p[0] = self.Enumerator(p[1], self._current_enumerator_value)
         self._current_enumerator_value += 1
-
-        p[0] = (p[1], self._current_enumerator_value,)
 
     @debug_production
     def p_function_specifier(self, p):
@@ -538,34 +537,46 @@ class C99Parser(object):
             pass
 
     @debug_production
-    def p_direct_declarator(self, p):
-        '''direct_declarator : IDENTIFIER
-                             | '(' declarator ')'
-                             | direct_declarator '[' ']'
+    def p_direct_declarator1(self, p):
+        '''direct_declarator : IDENTIFIER '''
+        p[0] = p[1]
+
+    @debug_production
+    def p_direct_declarator2(self, p):
+        '''direct_declarator : '(' declarator ')' '''
+        p[0] = p[2]
+
+    @debug_production
+    def p_direct_declarator3(self, p):
+        '''direct_declarator : direct_declarator '[' ']'
                              | direct_declarator '[' type_qualifier_list ']'
                              | direct_declarator '[' type_qualifier_list assignment_expression ']'
-                             | direct_declarator '[' assignment_expression ']'
-                             | direct_declarator '[' STATIC assignment_expression ']'
+                             | direct_declarator '[' assignment_expression ']' '''
+        pass
+
+    @debug_production
+    def p_direct_declarator4(self, p):
+        '''direct_declarator : direct_declarator '[' STATIC assignment_expression ']'
                              | direct_declarator '[' STATIC type_qualifier_list assignment_expression ']'
-                             | direct_declarator '[' type_qualifier_list STATIC assignment_expression ']'
-                             | direct_declarator '[' '*' ']'
-                             | direct_declarator '[' type_qualifier_list '*' ']'
+                             | direct_declarator '[' type_qualifier_list STATIC assignment_expression ']' '''
+        pass
+
+    @debug_production
+    def p_direct_declarator5(self, p):
+        '''direct_declarator : direct_declarator '[' '*' ']'
+                             | direct_declarator '[' type_qualifier_list '*' ']' '''
+        pass
+
+    @debug_production
+    def p_direct_declarator6(self, p):
+        '''direct_declarator : direct_declarator '(' ')'
                              | direct_declarator '(' parameter_type_list ')'
-                             | direct_declarator '(' ')'
                              | direct_declarator '(' identifier_list ')'
                              '''
-        
-        # We are only interested about struct declaration that aren't 
-        # function pointer or pointer on array values. So they aren't
-        # handled.
-
-        # Will return identifier and it's array length.
-        if len(p) == 2:
-            p[0] = p[1]
-        elif len(p) == 5:
-            # Only handle array case
-            if p[2] == '[':
-                p[0] = f'''{p[1]}[{p[3]}]'''
+        """
+        Function declaration
+        """
+        pass
 
     @debug_production
     def p_pointer(self, p):
@@ -607,8 +618,8 @@ class C99Parser(object):
 
     @debug_production
     def p_parameter_declaration(self, p):
-        '''parameter_declaration : declaration_specifiers declarator
-                                 | declaration_specifiers
+        '''parameter_declaration : declaration_specifiers
+                                 | declaration_specifiers declarator
                                  | declaration_specifiers abstract_declarator '''
         pass
 
@@ -639,26 +650,49 @@ class C99Parser(object):
         pass
 
     @debug_production
-    def p_direct_abstract_declarator(self, p):
-        '''direct_abstract_declarator : '(' abstract_declarator ')'
-                                      | '[' ']'
-                                      | '[' assignment_expression ']'
-                                      | '[' type_qualifier_list ']'
-                                      | '[' type_qualifier_list assignment_expression ']'
-                                      | direct_abstract_declarator '[' assignment_expression ']'
-                                      | direct_abstract_declarator '[' type_qualifier_list assignment_expression ']'
-                                      | '[' STATIC assignment_expression ']'
-                                      | '[' STATIC type_qualifier_list assignment_expression ']'
-                                      | '[' type_qualifier_list STATIC assignment_expression ']'
-                                      | direct_abstract_declarator '[' STATIC assignment_expression ']'
-                                      | direct_abstract_declarator '[' STATIC type_qualifier_list assignment_expression ']'
-                                      | direct_abstract_declarator '[' type_qualifier_list STATIC assignment_expression ']'
-                                      | '[' '*' ']'
-                                      | direct_abstract_declarator '[' '*' ']'
-                                      | '(' ')'
+    def p_direct_abstract_declarator1(self, p):
+        '''direct_abstract_declarator : '(' abstract_declarator ')' '''
+        p[0] = p[2]
+
+    @debug_production
+    def p_direct_abstract_declarator2(self, p):
+        '''direct_abstract_declarator : direct_abstract_declarator '[' ']'
+                                      | direct_abstract_declarator '[' assignment_expression ']' '''
+        pass
+
+    @debug_production
+    def p_direct_abstract_declarator3(self, p):
+        '''direct_abstract_declarator : '[' ']'
+                                      | '[' assignment_expression ']' 
+                                      | '[' type_qualifier_list ']' 
+                                      | '[' type_qualifier_list assignment_expression ']' 
+                                      '''
+        pass
+
+    @debug_production
+    def p_direct_abstract_declarator4(self, p):
+        '''direct_abstract_declarator : direct_abstract_declarator '[' '*' ']'
+                                      '''
+        pass
+
+    @debug_production
+    def p_direct_abstract_declarator5(self, p):
+        '''direct_abstract_declarator : '[' '*' ']'
+                                      '''
+        pass
+
+    @debug_production
+    def p_direct_abstract_declarator6(self, p):
+        '''direct_abstract_declarator : direct_abstract_declarator '(' ')'
+                                      | direct_abstract_declarator '(' parameter_type_list ')'
+                                      '''
+        pass
+
+    @debug_production
+    def p_direct_abstract_declarator7(self, p):
+        '''direct_abstract_declarator : '(' ')'
                                       | '(' parameter_type_list ')'
-                                      | direct_abstract_declarator '(' ')'
-                                      | direct_abstract_declarator '(' parameter_type_list ')' '''
+                                      '''
         pass
 
     @debug_production
