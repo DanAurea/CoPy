@@ -24,7 +24,7 @@ class Struct(object):
         return not len(self.declaration_list)
 
     def __repr__(self):
-        s = f'''
+        s = f'''Identifier : {self.identifier}
                 Declaration list: {self.declaration_list} 
                 Packing: {self.packing} 
             '''
@@ -43,7 +43,7 @@ class Union(object):
         return not len(self.declaration_list)
 
     def __repr__(self):
-        s = f'''
+        s = f'''Identifier : {self.identifier}
                 Declaration list: {self.declaration_list} 
                 Packing: {self.packing} 
             '''
@@ -213,9 +213,7 @@ class Declaration(object):
         return self.__repr__()
 
     def __repr__(self):
-        s = f'''
-            {self.specifier_list} {self.init_declarator_list};
-            '''
+        s = f'''{self.specifier_list} {self.init_declarator_list};'''
         return s
 
 class ArrayDeclarator(object):

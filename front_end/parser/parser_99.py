@@ -301,10 +301,10 @@ class C99Parser(object):
         p[0].add_specifier_list(p[1])
                 
         if len(p) == 4:
-            p[0].init_declarator_list = p[2]
+            init_declarator_list = p[2]
+            p[0].init_declarator_list = init_declarator_list
             
             if p[0].is_typedef:
-                init_declarator_list = p[2]
                 # When a typedef is encountered, last declaration specifier is always
                 # an enumeration, struct or union.
                 typedef_object = p[0].specifier_list[-1]
@@ -427,6 +427,9 @@ class C99Parser(object):
     @debug_production
     def p_struct_declaration(self, p):
         '''struct_declaration : specifier_qualifier_list struct_declarator_list ';' '''
+        if isinstance(p[1][-1], ir.Enumeration) or isinstance(p[1][-1], ir.Struct) or isinstance(p[1][-1], ir.Union):
+                p[1][-1].identifier = p[2][0].declarator
+
         p[0] = ir.StructDeclaration(p[1], p[2])
 
     @debug_production

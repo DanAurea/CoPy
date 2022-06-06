@@ -67,7 +67,17 @@ class CTypesGenerator(PythonGenerator):
         fields = []
 
         for declaration in typedef.declaration_list:
-            pass
+            last_spec_qual = declaration.specifier_qualifier_list[-1]
+            
+            # Handle nested typedefs
+            if isinstance(last_spec_qual, ir.Enumeration):
+                self.generate_enumeration(last_spec_qual)
+            elif isinstance(last_spec_qual, ir.Struct):
+                self.generate_struct(last_spec_qual)
+            elif isinstance(last_spec_qual, ir.Union):
+                self.generate_union(last_spec_qual)
+            else:
+                pass
 
         return CTypesGenerator.STRUCT_TEMPLATE.format(import_list = '\n'.join(import_list), class_name = class_name,
                                                         base_class = base_class, packing = typedef.packing, fields = '\n\t'.join(fields))
