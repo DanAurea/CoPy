@@ -216,12 +216,16 @@ class Declaration(object):
 
 class ArrayDeclarator(object):
 
-    def __init__(self, direct_declarator = None, length = None):
-        self.direct_declarator = direct_declarator
-        self.length            = length
+    def __init__(self, direct_declarator = None, length = -1, type_qualifier_list = [], is_vla = False):
+        self.direct_declarator   = direct_declarator
+        self.length              = length
+        self.type_qualifier_list = type_qualifier_list
+        self.is_vla              = is_vla
 
     def __repr__(self):
-        s = f'''{self.direct_declarator}[{self.length}]'''
+        length = self.length if self.length != -1 else '*' if self.length == -1 and self.is_vla else ''
+
+        s = f'''{self.direct_declarator}[{' '.join(self.type_qualifier_list)}{' ' if self.type_qualifier_list and self.length != -1 else ''}{length}]'''
         return s
 
 class Pointer(object):

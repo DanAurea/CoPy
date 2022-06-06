@@ -549,26 +549,46 @@ class C99Parser(object):
     @debug_production
     def p_direct_declarator3(self, p):
         '''direct_declarator : direct_declarator '[' ']'
-                             | direct_declarator '[' type_qualifier_list ']'
-                             | direct_declarator '[' type_qualifier_list assignment_expression ']'
-                             | direct_declarator '[' assignment_expression ']' '''
-        p[0] = ir.ArrayDeclarator(p[1], p[3])
+                             | direct_declarator '[' type_qualifier_list ']' '''        
+        #Length of -1 means size is unspecified
+        p[0] = ir.ArrayDeclarator(p[1], length = -1, type_qualifier_list = p[3] if len(p) == 5 else [])
 
     @debug_production
     def p_direct_declarator4(self, p):
-        '''direct_declarator : direct_declarator '[' STATIC assignment_expression ']'
-                             | direct_declarator '[' STATIC type_qualifier_list assignment_expression ']'
-                             | direct_declarator '[' type_qualifier_list STATIC assignment_expression ']' '''
-        p[0] = ir.ArrayDeclarator(p[1], p[3])
+        '''direct_declarator : direct_declarator '[' assignment_expression ']'
+                             | direct_declarator '[' type_qualifier_list assignment_expression ']' '''
+        length = p[3] if len(p) == 5 else p[4]
+        type_qualifier_list = p[3] if len(p) == 6 else []
+        p[0] = ir.ArrayDeclarator(p[1], length, type_qualifier_list)
 
     @debug_production
     def p_direct_declarator5(self, p):
-        '''direct_declarator : direct_declarator '[' '*' ']'
-                             | direct_declarator '[' type_qualifier_list '*' ']' '''
-        p[0] = ir.ArrayDeclarator(p[1], p[3])
+        '''direct_declarator : direct_declarator '[' STATIC assignment_expression ']'
+                             | direct_declarator '[' STATIC type_qualifier_list assignment_expression ']'
+                             | direct_declarator '[' type_qualifier_list STATIC assignment_expression ']' '''
+        qualifier_list = [p[3]] if not isinstance(p[3], list) else p[3]
+        
+        if len(p) == 6:
+            length = p[4]
+        elif len(p) == 7:
+            if isinstance(p[4], list):
+                qualifier_list.extend(p[4])
+            else:
+                qualifier_list.append(p[4])
+
+            length = p[5]
+        
+        p[0] = ir.ArrayDeclarator(p[1], length, qualifier_list)
 
     @debug_production
     def p_direct_declarator6(self, p):
+        '''direct_declarator : direct_declarator '[' '*' ']'
+                             | direct_declarator '[' type_qualifier_list '*' ']' '''
+        #Length of -1 means size is unspecified
+        p[0] = ir.ArrayDeclarator(p[1], length = -1, type_qualifier_list = p[3] if len(p) == 6 else [], is_vla = True)
+
+    @debug_production
+    def p_direct_declarator7(self, p):
         '''direct_declarator : direct_declarator '(' ')'
                              | direct_declarator '(' parameter_type_list ')'
                              | direct_declarator '(' identifier_list ')'
