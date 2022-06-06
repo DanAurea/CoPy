@@ -58,7 +58,7 @@ class StructDeclaration(object):
     def __repr__(self):
         new_line = '\n' 
         s = f'''
-                {" ".join(self.specifier_qualifier_list)} {str(self.struct_declarator_list)[1:-1]};
+                {" ".join([str(spec_qual) for spec_qual in self.specifier_qualifier_list])} {str(self.struct_declarator_list)[1:-1]};
             '''
         return s
 
