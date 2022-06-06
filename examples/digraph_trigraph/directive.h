@@ -20,3 +20,13 @@ SIGNAL \
 #define FUNC(x, a) a + x
 static int elseVariable;
 #endif
+
+typedef enum example
+{
+    ENUM_1 = 2,
+    ENUM_2,
+    ENUM_3,
+    ENUM_4,
+    ENUM_5 = 61,
+    ENUM_6
+}example_t;
