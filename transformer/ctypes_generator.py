@@ -34,7 +34,6 @@ class CTypesGenerator(PythonGenerator):
         :type       typedef:  { type_description }
         """
         data_type = 'ctypes.c_uint32'
-        import_list = ['import ctypes', super(CTypesGenerator, self).generate_enumeration(typedef)]
 
         if typedef.packing == 1:
             data_type = 'ctypes.c_uint8'
@@ -50,9 +49,9 @@ class CTypesGenerator(PythonGenerator):
         class_name = "".join([name.capitalize() for name in typedef.identifier.split('_')])
         base_class = f'''ctypes.{"".join([name.capitalize() for name in self.endianness.name.split('_')])}Structure'''
 
-        return CTypesGenerator.ENUM_TEMPLATE.format(import_list = '\n'.join(import_list), class_name = "CTypes" + class_name, 
-                                                    base_class = base_class, data_type = data_type,
-                                                    packing = typedef.packing)
+        python_enum = super(CTypesGenerator, self).generate_enumeration(typedef) + '\n'
+        return python_enum + CTypesGenerator.ENUM_TEMPLATE.format(class_name = "CTypes" + class_name, base_class = base_class, 
+                                                    data_type = data_type, packing = typedef.packing)
 
     def generate_struct(self, typedef):
         """
@@ -61,26 +60,26 @@ class CTypesGenerator(PythonGenerator):
         :param      typedef:  The typedef
         :type       typedef:  { type_description }
         """
-        import_list = []
         class_name = "".join([name.capitalize() for name in typedef.identifier.split('_')])
         base_class = f'''ctypes.{"".join([name.capitalize() for name in self.endianness.name.split('_')])}Structure'''
         fields = []
-
+        nested_class = ''
+        
         for declaration in typedef.declaration_list:
             last_spec_qual = declaration.specifier_qualifier_list[-1]
             
             # Handle nested typedefs
             if isinstance(last_spec_qual, ir.Enumeration):
-                self.generate_enumeration(last_spec_qual)
+                nested_enum = self.generate_enumeration(last_spec_qual)
             elif isinstance(last_spec_qual, ir.Struct):
-                self.generate_struct(last_spec_qual)
+                nested_struct = self.generate_struct(last_spec_qual)
             elif isinstance(last_spec_qual, ir.Union):
-                self.generate_union(last_spec_qual)
+                nested_union = self.generate_union(last_spec_qual)
             else:
                 pass
 
-        return CTypesGenerator.STRUCT_TEMPLATE.format(import_list = '\n'.join(import_list), class_name = class_name,
-                                                        base_class = base_class, packing = typedef.packing, fields = '\n\t'.join(fields))
+        return CTypesGenerator.STRUCT_TEMPLATE.format(  nested_class = nested_class, class_name = class_name, base_class = base_class,
+                                                        packing = typedef.packing, fields = '\n\t'.join(fields))
 
     def generate_union(self, typedef):
         """
@@ -89,7 +88,6 @@ class CTypesGenerator(PythonGenerator):
         :param      typedef:  The typedef
         :type       typedef:  { type_description }
         """
-        import_list = []
         class_name = "".join([name.capitalize() for name in typedef.identifier.split('_')])
         base_class = f'''ctypes.{"".join([name.capitalize() for name in self.endianness.name.split('_')])}Union'''
         fields = []
@@ -97,8 +95,8 @@ class CTypesGenerator(PythonGenerator):
         for declaration in typedef.declaration_list:
             pass
 
-        return CTypesGenerator.UNION_TEMPLATE.format(import_list = '\n'.join(import_list), class_name = class_name,
-                                                        base_class = base_class, packing = typedef.packing, fields = '\n\t'.join(fields))
+        return CTypesGenerator.UNION_TEMPLATE.format(   class_name = class_name, base_class = base_class, 
+                                                        packing = typedef.packing, fields = '\n\t'.join(fields))
 
     def generate_typedef(self, typedef):
         """
