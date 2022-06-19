@@ -25,6 +25,6 @@ class PythonGenerator(Generator):
         :type       typedef:  { type_description }
         """
         enum_name = "".join([name.capitalize() for name in typedef.identifier.split('_')])
-        enumerator_list = "\n\t".join([f'''{enumerator.name.upper()} = {hex(enumerator.value).upper()}''' for enumerator in typedef.enumerator_list])
+        enumerator_list = f'''\n{' ' * 4}'''.join([f'''{enumerator.name.upper()} = 0x{format(enumerator.value,'02x').upper()}''' for enumerator in typedef.enumerator_list])
 
         return PythonGenerator.ENUM_TEMPLATE.format(class_name = enum_name, enumerator_list = enumerator_list)
