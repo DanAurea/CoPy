@@ -90,3 +90,7 @@ C 99 preprocessor seems fully operational, only missing feature is pragma handli
 A simple C front end is already available but some refactoring are required to ease further maintainance and create some abstraction level to add compiler dependent implementation such as packing from MSVC/GCC etc...
 
 c99_preprocessor.py has been the main focus because a PoC was the main purpose before proposing a project that could work with complex project that relies alot on compiler dependent feature, running c99_preprocessor.py will show that preprocessed_code can be generated.
+
+A first ctypes generator has been added to show what can be achieved based on current project state.
+Output directory show up a directive.py being generated from this generator and using directive.i which has been as well preprocessed by the project C preprocessor.
+The final output follows the C struct even if initial struct is quite complex and contains a lot of different type of member declaration such as anonymous member, nested member, enumerations, bitfields, multidimensional array or pointers.
