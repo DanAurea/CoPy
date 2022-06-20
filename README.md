@@ -42,45 +42,235 @@ For instance:
 
 The transpiler will parse below C struct
 ```c
-// example.h
-#include "dependency.h"
-
-typedef struct example
+typedef enum
 {
-    uint32_t oneField_u32;
-    uint32_t secondField_u32:16;
-    uint32_t thirdField_u32:15;
-    uint32_t fourthField_u32:1;
-    structDependency_t dep_s; 
-}example_t;
+    NONE = 0,
+    REPOSITIONABLE = 1,
+    EXECUTABLE = 2,
+    SHARED_OBJECT = 3,
+    CORE = 4,
+}fileType_e;
 
-// dependency.h
-
-typedef struct structDependency
+typedef enum
 {
-    char c;
-    int i;
-}structDependency_t;
+    NONE_M = 0,
+    SPARC = 2,
+    INTEL_80386 = 3,
+    MOTOROLA_68000 = 4,
+    INTEL_I860 = 7,
+    MIPS_I = 8,
+    INTEL_I960 = 19,
+    POWERPC = 20,
+    ARM_M = 40,
+    INTEL_IA64 = 50,
+    X64_M = 62,
+    RISC_V = 243,
+}machine_e;
+
+typedef enum
+{
+    NONE_V = 0x00,
+    CURRENT = 0x01,
+}version_e;
+
+typedef enum
+{
+    NONE_X = 0,
+    X86 = 1,
+    X64_X = 2,
+}x86_64_e;
+
+typedef enum
+{
+    NONE_E = 0,
+    LSB = 1,
+    MSB = 2,
+}endianness_e;
+
+typedef enum
+{
+    UNIX = 0,
+    HP_X = 1,
+    NET_BSD = 2,
+    LINUX = 3,
+    SUN_SOLARIS = 6,
+    IBM_AIX = 7,
+    SGI_IRIX = 8,
+    FREEBSD = 9,
+    COMPAQ_TRU64 = 10,
+    NOVELL_MODESTO = 11,
+    OPENBSD = 12,
+    ARM_EABI = 64,
+    ARM_A = 97,
+    STANDALONE = 255,
+}abi_e;
+
+typedef struct
+{
+    unsigned char magicNumber[4U];
+    x86_64_e platform;
+    endianness_e endianness;
+    char version;
+    abi_e abi;
+    char abiVersion;
+    char padding[7U];
+    char size;
+}identification_t;
+
+typedef struct elf32_hdr
+{
+    identification_t identification;
+    short type_u16;
+    machine_e targetMachine_u16;
+    version_e version_u32;
+    int entryPoint_u32;
+    int pHDROffset_u32;
+    int sHROffset_u32;
+    int flag_u32;
+    short hdrSize_u16;
+    short entryPSize_u16;
+    short numPEntry_u16;
+    short entrySSize_u16;
+    short numSEntry_u16;
+    short sIdx_u16;
+} elf32_hdr_t;
 ```
 and generate below Python representation
 ```python
-# example.py
-import dependency
+# elf.py
+import ctypes
+import enum
 
-class Example(Structure):
+class FiletypeE(ctypes.LittleEndianStructure):
+    class Value(enum.IntEnum):
+        NONE = 0,
+        REPOSITIONABLE = 1,
+        EXECUTABLE = 2,
+        SHARED_OBJECT = 3,
+        CORE = 4
+    _pack_   = 4
     _fields_ = [
-                    ("oneField_u32", c_uint32),
-                    ("secondField_u32", c_uint32, 16),
-                    ("thirdField_u32", c_uint32, 15),
-                    ("fourthField_u32", c_uint32, 1),
-                    ("dep_s", dependency.Dependency),
+                    ('_value', ctypes.c_uint32),
+               ]
+
+    @property
+    def value(self):
+        return self.Value(self._value)
+class MachineE(ctypes.LittleEndianStructure):
+    class Value(enum.IntEnum):
+        NONE_M = 0,
+        SPARC = 2,
+        INTEL_80386 = 3,
+        MOTOROLA_68000 = 4,
+        INTEL_I860 = 7,
+        MIPS_I = 8,
+        INTEL_I960 = 19,
+        POWERPC = 20,
+        ARM_M = 40,
+        INTEL_IA64 = 50,
+        X64_M = 62,
+        RISC_V = 243
+    _pack_   = 4
+    _fields_ = [
+                    ('_value', ctypes.c_uint32),
+               ]
+
+    @property
+    def value(self):
+        return self.Value(self._value)
+class VersionE(ctypes.LittleEndianStructure):
+    class Value(enum.IntEnum):
+        NONE_V = 0,
+        CURRENT = 1
+    _pack_   = 4
+    _fields_ = [
+                    ('_value', ctypes.c_uint32),
+               ]
+
+    @property
+    def value(self):
+        return self.Value(self._value)
+class X8664E(ctypes.LittleEndianStructure):
+    class Value(enum.IntEnum):
+        NONE_X = 0,
+        X86 = 1,
+        X64_X = 2
+    _pack_   = 4
+    _fields_ = [
+                    ('_value', ctypes.c_uint32),
+               ]
+
+    @property
+    def value(self):
+        return self.Value(self._value)
+class EndiannessE(ctypes.LittleEndianStructure):
+    class Value(enum.IntEnum):
+        NONE_E = 0,
+        LSB = 1,
+        MSB = 2
+    _pack_   = 4
+    _fields_ = [
+                    ('_value', ctypes.c_uint32),
+               ]
+
+    @property
+    def value(self):
+        return self.Value(self._value)
+class AbiE(ctypes.LittleEndianStructure):
+    class Value(enum.IntEnum):
+        UNIX = 0,
+        HP_X = 1,
+        NET_BSD = 2,
+        LINUX = 3,
+        SUN_SOLARIS = 6,
+        IBM_AIX = 7,
+        SGI_IRIX = 8,
+        FREEBSD = 9,
+        COMPAQ_TRU64 = 10,
+        NOVELL_MODESTO = 11,
+        OPENBSD = 12,
+        ARM_EABI = 64,
+        ARM_A = 97,
+        STANDALONE = 255
+    _pack_   = 4
+    _fields_ = [
+                    ('_value', ctypes.c_uint32),
+               ]
+
+    @property
+    def value(self):
+        return self.Value(self._value)
+class IdentificationT(ctypes.LittleEndianStructure):
+
+    _pack_   = 4
+    _fields_ = [
+                    ('magicNumber', ctypes.c_uint8 * 4),
+                    ('platform', X8664E),
+                    ('endianness', EndiannessE),
+                    ('version', ctypes.c_int8),
+                    ('abi', AbiE),
+                    ('abiVersion', ctypes.c_int8),
+                    ('padding', ctypes.c_int8 * 7),
+                    ('size', ctypes.c_int8),
                 ]
+class Elf32HdrT(ctypes.LittleEndianStructure):
 
-# dependency.py
-class Dependency(Structure):
+    _pack_   = 4
     _fields_ = [
-                    ("c", c_char),
-                    ("i", c_int32),
+                    ('identification', IdentificationT),
+                    ('type_u16', ctypes.c_int16),
+                    ('targetMachine_u16', MachineE),
+                    ('version_u32', VersionE),
+                    ('entryPoint_u32', ctypes.c_int32),
+                    ('pHDROffset_u32', ctypes.c_int32),
+                    ('sHROffset_u32', ctypes.c_int32),
+                    ('flag_u32', ctypes.c_int32),
+                    ('hdrSize_u16', ctypes.c_int16),
+                    ('entryPSize_u16', ctypes.c_int16),
+                    ('numPEntry_u16', ctypes.c_int16),
+                    ('entrySSize_u16', ctypes.c_int16),
+                    ('numSEntry_u16', ctypes.c_int16),
+                    ('sIdx_u16', ctypes.c_int16),
                 ]
 ```
 

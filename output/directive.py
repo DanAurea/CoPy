@@ -55,3 +55,10 @@ class StructT(ctypes.LittleEndianStructure):
                     ('anotherNestedStruct_t', AnothernestedstructT),
                     ('s', AnotherstructT),
                 ]
+class JuT(ctypes.LittleEndianStructure):
+
+    _pack_   = 4
+    _fields_ = [
+                    ('baton', ctypes.c_int32),
+                    ('cosmo', ctypes.c_float),
+                ]

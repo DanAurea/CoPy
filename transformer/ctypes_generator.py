@@ -51,9 +51,10 @@ class CTypesGenerator(Generator):
         class_name = ''.join([name.capitalize() for name in typedef.identifier.split('_')])
         base_class = f'''ctypes.{''.join([name.capitalize() for name in self.endianness.name.split('_')])}Structure'''
 
-        python_enum = self._python_generator.generate_enumeration(typedef) + '\n'
-        return python_enum + CTypesGenerator.ENUM_TEMPLATE.format(class_name = "CTypes" + class_name, base_class = base_class, 
-                                                    data_type = data_type, packing = typedef.packing, python_enum_name = class_name)
+        enumerator_list = [f'{name} = {value}' for name, value in typedef.enumerator_list]
+
+        return CTypesGenerator.ENUM_TEMPLATE.format(class_name = class_name, base_class = base_class, 
+                                                    data_type = data_type, packing = typedef.packing, enumerator_list = textwrap.indent(',\n'.join(enumerator_list), prefix = ' ' * 2 * self._tab_size) )
 
     def _generate_type_declaration(self, declaration):
         """
@@ -212,10 +213,10 @@ if __name__ == '__main__':
     generator = CTypesGenerator(endianness = Endianness.LITTLE_ENDIAN) 
     parser = C99Parser(debug = False)
 
-    with open("../output/directive.i", "rt") as include_file:
+    with open("../examples/elf.i", "rt") as include_file:
         data = include_file.read()
 
     ast = parser.parse(data)
     
-    with open("../output/directive.py", "wt") as py_directive_file:
+    with open("../output/elf.py", "wt") as py_directive_file:
         py_directive_file.write(generator.generate(ast))
