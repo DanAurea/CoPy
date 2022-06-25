@@ -71,7 +71,7 @@ typedef struct
     char abiVersion;
     char padding[7U];
     char size;
-}identification_t;
+}identification_t __attribute__((packed));
 
 typedef struct elf32_hdr
 {

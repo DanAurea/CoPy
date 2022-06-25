@@ -257,7 +257,7 @@ class C99Lexer(object):
 if __name__ == "__main__":
     lexer = C99Lexer()
 
-    with open("output/directive.i", "rt") as file:
+    with open("../../output/directive.i", "rt") as file:
         data = file.read()
 
     token_list = lexer.tokenize(data)
