@@ -3,12 +3,14 @@ import sys
 
 sys.path.append('../../')
 
+from collections import namedtuple
 from front_end.lexer.cregex import *
 
 class C99Lexer(object):
     """
     Produce a token list from a C source code.
     """
+    Symbol   = namedtuple('Symbol', ['value', 'typedef'])
 
     # Keywords
     reserved = {
@@ -112,7 +114,7 @@ class C99Lexer(object):
     def get_tag(self, tag):
         return self._tag_table[tag]
 
-    def add_symbol(self, symbol, value):
+    def add_symbol(self, symbol, value, typedef = False):
         """
         Adds a symbol to the internal symbol table
         to follow redefinition.
@@ -125,7 +127,7 @@ class C99Lexer(object):
         # We need to value because lexer will first see a symbol as identifier so in case we list enumerators
         # to avoid raising exception because of enumerator redefinition we do this check.
         if (symbol not in self._symbol_table):
-            self._symbol_table[symbol] = value
+            self._symbol_table[symbol] = self.Symbol(value, typedef)
             return True
         else:
             return False
@@ -138,7 +140,7 @@ class C99Lexer(object):
             t.type = self.reserved[t.value] 
         else:
             if t.value in self._symbol_table:
-                t.type = "TYPEDEF_NAME"
+                t.type = "TYPEDEF_NAME" if self._symbol_table[t.value].typedef else "IDENTIFIER"
 
         return t
 

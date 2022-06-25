@@ -14,6 +14,8 @@ class C99Parser(object):
     Produce a parser that create an AST from C source/header files
     and will provide a compatible interface to Python ctypes library.
     """
+
+    # TODO: Should be defined as IR and not as a parser dependent representation.
     Enumerator     = namedtuple('Enumerator', ['name', 'value'])
     InitDeclarator = namedtuple('InitDeclarator', ['name', 'value'])
 
@@ -310,9 +312,10 @@ class C99Parser(object):
                 typedef_object = p[0].specifier_list[-1]
 
                 typedef_object.identifier = init_declarator_list[0].name
+
                 # init_declarator are always a tuple representing declarator name and its initial value
                 for init_declarator in init_declarator_list:
-                    self._lexer.add_symbol(init_declarator.name, typedef_object)
+                    self._lexer.add_symbol(init_declarator.name, typedef_object, p[0].is_typedef)
 
     @debug_production
     def p_declaration_specifiers(self, p):
