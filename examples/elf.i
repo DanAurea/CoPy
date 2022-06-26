@@ -71,9 +71,9 @@ typedef struct
     char abiVersion;
     char padding[7U];
     char size;
-}identification_t __attribute__((packed));
+}__attribute__((packed)) identification_t;
 
-typedef struct elf32_hdr
+typedef struct __attribute__((aligned(4))) __attribute__((packed)) elf32_hdr
 {
     identification_t identification;
     short type_u16;
@@ -89,4 +89,4 @@ typedef struct elf32_hdr
     short entrySSize_u16;
     short numSEntry_u16;
     short sIdx_u16;
-} elf32_hdr_t __attribute__((aligned(4)));
+}elf32_hdr_t;

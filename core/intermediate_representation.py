@@ -247,3 +247,14 @@ class Pointer(object):
 
         s += f''' {self.direct_declarator}'''
         return s
+
+class Attribute(object):
+
+    def __init__(self, name, arg_list = []):
+        self.name     = name
+        self.arg_list = arg_list
+
+    def __repr__(self):
+        s = f'''Attribute name: {self.name}\nArgument list: {self.arg_list}'''
+
+        return s

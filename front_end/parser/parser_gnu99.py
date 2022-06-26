@@ -20,18 +20,89 @@ class GNU99Parser(C99Parser):
     def __init__(self, lexer = None, debug = None, **kwargs):
         super(GNU99Parser, self).__init__(GNU99Lexer(), debug, **kwargs)
 
+    @debug_production
+    def p_enum_specifier_former_attribute(self, p):
+        '''enum_specifier : ENUM attribute_specifier_list '{' enumerator_list '}'
+                          | ENUM attribute_specifier_list '{' enumerator_list  ',' '}' '''
+        attribute_specifier_list = p[2]
+        p.slice.pop(2)
+        self.p_enum_specifier(p)
+
+    @debug_production
+    def p_enum_specifier2_former_attribute(self, p):
+        '''enum_specifier : ENUM attribute_specifier_list IDENTIFIER '{' enumerator_list '}'
+                          | ENUM attribute_specifier_list IDENTIFIER '{' enumerator_list  ',' '}' '''
+        # To avoid code duplication, attribute specifier list is removed from production rule and remaining production rule is parsed by C99 parser.
+        attribute_specifier_list = p[2]
+        p.slice.pop(2)
+        self.p_enum_specifier2(p)
+    
+    @debug_production
+    def p_enum_specifier3_former_attribute(self, p):
+        '''enum_specifier : ENUM attribute_specifier_list IDENTIFIER '''
+        # To avoid code duplication, attribute specifier list is removed from production rule and remaining production rule is parsed by C99 parser.
+        attribute_specifier_list = p[2]
+        p.slice.pop(2)
+        self.p_enum_specifier3(p)
+
+    @debug_production
+    def p_enum_specifier_later_attribute(self, p):
+        '''enum_specifier : ENUM '{' enumerator_list '}' attribute_specifier_list
+                          | ENUM '{' enumerator_list  ',' '}' attribute_specifier_list'''
+        attribute_specifier_list = p[-1]
+        p.slice.pop()
+        self.p_enum_specifier(p)
+
+    @debug_production
+    def p_enum_specifier2_later_attribute(self, p):
+        '''enum_specifier : ENUM IDENTIFIER '{' enumerator_list '}' attribute_specifier_list
+                          | ENUM IDENTIFIER '{' enumerator_list  ',' '}' attribute_specifier_list'''
+        # To avoid code duplication, attribute specifier list is removed from production rule and remaining production rule is parsed by C99 parser.
+        attribute_specifier_list = p[-1]
+        p.slice.pop()
+        self.p_enum_specifier2(p)
+
+    @debug_production
+    def p_struct_or_union_specifier_former_attribute(self, p):
+        '''struct_or_union_specifier : struct_or_union attribute_specifier_list '{' struct_declaration_list '}'
+                                     | struct_or_union attribute_specifier_list IDENTIFIER 
+                                     | struct_or_union attribute_specifier_list IDENTIFIER '{' struct_declaration_list '}'
+                                     '''
+        # To avoid code duplication, attribute specifier list is removed from production rule and remaining production rule is parsed by C99 parser.
+        attribute_specifier_list = p[2]
+        p.slice.pop(2)                
+        self.p_struct_or_union_specifier(p)
+        
+        for attribute_specifier in attribute_specifier_list:
+            if attribute_specifier.name == 'packed':
+                p[0].packing = 1
+                
+    @debug_production
+    def p_struct_or_union_specifier_later_attribute(self, p):
+        '''struct_or_union_specifier : struct_or_union '{' struct_declaration_list '}' attribute_specifier_list
+                                     | struct_or_union IDENTIFIER '{' struct_declaration_list '}' attribute_specifier_list 
+                                     '''
+        # To avoid code duplication, attribute specifier list is removed from production rule and remaining production rule is parsed by C99 parser.
+        attribute_specifier_list = p[-1]
+        p.slice.pop()
+        self.p_struct_or_union_specifier(p)
+
     def p_attribute_specifier_list(self, p):
         '''
         attribute_specifier_list : attribute_specifier
-                                 | attribute_specifier attribute_specifier_list
+                                 | attribute_specifier_list attribute_specifier
         '''
-        pass# 
-    
+        if len(p) == 2:
+            p[0] = p[1]
+        else:
+            p[0] = p[1]
+            p[0].extend(p[2])
+
     def p_attribute_specifier(self, p):
         '''
         attribute_specifier : __ATTRIBUTE__ '(' '(' attribute_list ')' ')'
         '''
-        pass
+        p[0] = p[4]
     
     def p_attribute_list(self, p):
         '''
@@ -40,27 +111,44 @@ class GNU99Parser(C99Parser):
                        | attribute_list ',' 
                        | attribute_list ',' attribute 
         '''
-        pass
+        p[0] = []
+
+        if len(p) == 2:
+            p[0] = [p[1]]
+        elif len(p) == 3:
+            p[0] = p[1]
+        elif len(p) == 4:
+            p[0] = p[1]
+            p[0].append(p[3])
     
     def p_attribute(self, p ):
         '''
         attribute : attribute_token
                   | attribute_token '(' attribute_argument_list ')'
         '''
-        pass
+        attribute = ir.Attribute(p[1])
+
+        if len(p) == 5:
+            attribute.arg_list = p[3]
+
+        p[0] = attribute
 
     def p_attribute_argument_list(self, p):
         '''
         attribute_argument_list : attribute_argument
                                 | attribute_argument_list ',' attribute_argument
         '''
-        pass
+        if len(p) == 2:
+            p[0] = p[1]
+        else:
+            p[0] = p[1]
+            p[0].append(p[3])
 
     def p_attribute_argument(self, p):
         '''
         attribute_argument : assignment_expression
         '''
-        pass
+        p[0] = p[1]
 
     def p_attribute_token(self, p):
         '''
