@@ -89,4 +89,4 @@ typedef struct elf32_hdr
     short entrySSize_u16;
     short numSEntry_u16;
     short sIdx_u16;
-} elf32_hdr_t;
+} elf32_hdr_t __attribute__((aligned(4)));

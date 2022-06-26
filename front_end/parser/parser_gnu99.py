@@ -35,21 +35,42 @@ class GNU99Parser(C99Parser):
     
     def p_attribute_list(self, p):
         '''
-        attribute_list : attribute
-                       | attribute ',' attribute_list
+        attribute_list : 
+                       | attribute
+                       | attribute_list ',' 
+                       | attribute_list ',' attribute 
         '''
         pass
     
-    def p_attribute(self, p):
+    def p_attribute(self, p ):
         '''
-        attribute : 
-                  | enumerator_attribute
-                  | function_attribute
-                  | label_attribute
-                  | type_attribute
-                  | statement_attribute
+        attribute : attribute_token
+                  | attribute_token '(' attribute_argument_list ')'
         '''
         pass
+
+    def p_attribute_argument_list(self, p):
+        '''
+        attribute_argument_list : attribute_argument
+                                | attribute_argument_list ',' attribute_argument
+        '''
+        pass
+
+    def p_attribute_argument(self, p):
+        '''
+        attribute_argument : assignment_expression
+        '''
+        pass
+
+    def p_attribute_token(self, p):
+        '''
+        attribute_token : enumerator_attribute
+                        | function_attribute
+                        | label_attribute
+                        | type_attribute
+                        | statement_attribute
+        '''
+        p[0] = p[1]
 
     def p_enumerator_attribute(self, p):
         '''
@@ -58,7 +79,7 @@ class GNU99Parser(C99Parser):
                              | UNAVAILABLE
                              | __UNAVAILABLE__
         '''
-        pass
+        p[0] = p[1]
     
     def p_function_attribute(self, p):
         '''
@@ -67,7 +88,7 @@ class GNU99Parser(C99Parser):
                            | UNAVAILABLE
                            | __UNAVAILABLE__
         '''
-        pass
+        p[0] = p[1]
 
     def p_label_attribute(self, p):
         '''
@@ -78,14 +99,14 @@ class GNU99Parser(C99Parser):
                         | UNUSED
                         | __UNUSED__
         '''
-        pass
+        p[0] = p[1]
     
     def p_statement_attribute(self, p):
         '''
         statement_attribute : FALLTHROUGH
                             | __FALLTHROUGH__
         '''
-        pass
+        p[0] = p[1]
 
     def p_type_attribute(self, p):
         '''
@@ -122,7 +143,7 @@ class GNU99Parser(C99Parser):
                        | WARN_IF_NOT_ALIGNED
                        | __WARN_IF_NOT_ALIGNED__
         '''
-        pass
+        p[0] = p[1]
 
 if __name__ == "__main__":
     parser = GNU99Parser(debug = False)
