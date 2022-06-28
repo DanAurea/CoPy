@@ -8,6 +8,16 @@ from front_end.parser.parser_99 import C99Parser
 
 import core.intermediate_representation as ir
 
+class Attribute(object):
+
+    def __init__(self, name, arg_list = []):
+        self.name     = name
+        self.arg_list = arg_list
+
+    def __repr__(self):
+        s = f'''Attribute name: {self.name}\nArgument list: {self.arg_list}'''
+        return s
+
 class GNU99Parser(C99Parser):
     """
     Produce a parser that create an AST from C source/header files
@@ -20,6 +30,19 @@ class GNU99Parser(C99Parser):
     def __init__(self, lexer = None, debug = None, **kwargs):
         super(GNU99Parser, self).__init__(GNU99Lexer(), debug, **kwargs)
 
+    def _apply_attribute_list(self, ir_object, attribute_list):
+        '''
+        Apply all attribute to the IR object.
+        '''        
+        # TODO: Check if ambiguous attributes (packed with aligned for instance)
+
+        # TODO: Callback function and map might be preferable instead of if/else statements.
+        for attribute in attribute_list:
+            if attribute.name == "packed":
+                ir_object.packing = 1
+            elif attribute.name == "aligned":
+                ir_object.packing = attribute.arg_list[0]
+
     @debug_production
     def p_enum_specifier_former_attribute(self, p):
         '''enum_specifier : ENUM attribute_specifier_list '{' enumerator_list '}'
@@ -27,6 +50,7 @@ class GNU99Parser(C99Parser):
         attribute_specifier_list = p[2]
         p.slice.pop(2)
         self.p_enum_specifier(p)
+        self._apply_attribute_list(p[0], attribute_specifier_list)
 
     @debug_production
     def p_enum_specifier2_former_attribute(self, p):
@@ -36,6 +60,7 @@ class GNU99Parser(C99Parser):
         attribute_specifier_list = p[2]
         p.slice.pop(2)
         self.p_enum_specifier2(p)
+        self._apply_attribute_list(p[0], attribute_specifier_list)
     
     @debug_production
     def p_enum_specifier3_former_attribute(self, p):
@@ -44,23 +69,41 @@ class GNU99Parser(C99Parser):
         attribute_specifier_list = p[2]
         p.slice.pop(2)
         self.p_enum_specifier3(p)
+        self._apply_attribute_list(p[0], attribute_specifier_list)
 
     @debug_production
     def p_enum_specifier_later_attribute(self, p):
-        '''enum_specifier : ENUM '{' enumerator_list '}' attribute_specifier_list
-                          | ENUM '{' enumerator_list  ',' '}' attribute_specifier_list'''
-        attribute_specifier_list = p[-1]
+        '''enum_specifier : ENUM '{' enumerator_list '}' attribute_specifier_list'''
+        attribute_specifier_list = p[5]
         p.slice.pop()
         self.p_enum_specifier(p)
+        self._apply_attribute_list(p[0], attribute_specifier_list)
+
+    @debug_production
+    def p_enum_specifier_later_attribute2(self, p):
+        '''enum_specifier : ENUM '{' enumerator_list  ',' '}' attribute_specifier_list'''
+        attribute_specifier_list = p[6]
+        p.slice.pop()
+        self.p_enum_specifier(p)
+        self._apply_attribute_list(p[0], attribute_specifier_list)
 
     @debug_production
     def p_enum_specifier2_later_attribute(self, p):
-        '''enum_specifier : ENUM IDENTIFIER '{' enumerator_list '}' attribute_specifier_list
-                          | ENUM IDENTIFIER '{' enumerator_list  ',' '}' attribute_specifier_list'''
+        '''enum_specifier : ENUM IDENTIFIER '{' enumerator_list '}' attribute_specifier_list'''
         # To avoid code duplication, attribute specifier list is removed from production rule and remaining production rule is parsed by C99 parser.
-        attribute_specifier_list = p[-1]
+        attribute_specifier_list = p[6]
         p.slice.pop()
         self.p_enum_specifier2(p)
+        self._apply_attribute_list(p[0], attribute_specifier_list)    
+
+    @debug_production
+    def p_enum_specifier2_later_attribute2(self, p):
+        '''enum_specifier : ENUM IDENTIFIER '{' enumerator_list  ',' '}' attribute_specifier_list'''
+        # To avoid code duplication, attribute specifier list is removed from production rule and remaining production rule is parsed by C99 parser.
+        attribute_specifier_list = p[7]
+        p.slice.pop()
+        self.p_enum_specifier2(p)
+        self._apply_attribute_list(p[0], attribute_specifier_list)
 
     @debug_production
     def p_struct_or_union_specifier_former_attribute(self, p):
@@ -70,22 +113,29 @@ class GNU99Parser(C99Parser):
                                      '''
         # To avoid code duplication, attribute specifier list is removed from production rule and remaining production rule is parsed by C99 parser.
         attribute_specifier_list = p[2]
-        p.slice.pop(2)                
+        p.slice.pop(2)
         self.p_struct_or_union_specifier(p)
-        
-        for attribute_specifier in attribute_specifier_list:
-            if attribute_specifier.name == 'packed':
-                p[0].packing = 1
-                
+        self._apply_attribute_list(p[0], attribute_specifier_list)
+
     @debug_production
     def p_struct_or_union_specifier_later_attribute(self, p):
         '''struct_or_union_specifier : struct_or_union '{' struct_declaration_list '}' attribute_specifier_list
-                                     | struct_or_union IDENTIFIER '{' struct_declaration_list '}' attribute_specifier_list 
                                      '''
         # To avoid code duplication, attribute specifier list is removed from production rule and remaining production rule is parsed by C99 parser.
-        attribute_specifier_list = p[-1]
+        attribute_specifier_list = p[5]
         p.slice.pop()
         self.p_struct_or_union_specifier(p)
+        self._apply_attribute_list(p[0], attribute_specifier_list)    
+
+    @debug_production
+    def p_struct_or_union_specifier_later_attribute2(self, p):
+        '''struct_or_union_specifier : struct_or_union IDENTIFIER '{' struct_declaration_list '}' attribute_specifier_list 
+                                     '''
+        # To avoid code duplication, attribute specifier list is removed from production rule and remaining production rule is parsed by C99 parser.
+        attribute_specifier_list = p[6]
+        p.slice.pop()
+        self.p_struct_or_union_specifier(p)
+        self._apply_attribute_list(p[0], attribute_specifier_list)
 
     def p_attribute_specifier_list(self, p):
         '''
@@ -126,7 +176,7 @@ class GNU99Parser(C99Parser):
         attribute : attribute_token
                   | attribute_token '(' attribute_argument_list ')'
         '''
-        attribute = ir.Attribute(p[1])
+        attribute = Attribute(p[1])
 
         if len(p) == 5:
             attribute.arg_list = p[3]
@@ -139,7 +189,7 @@ class GNU99Parser(C99Parser):
                                 | attribute_argument_list ',' attribute_argument
         '''
         if len(p) == 2:
-            p[0] = p[1]
+            p[0] = [p[1]]
         else:
             p[0] = p[1]
             p[0].append(p[3])

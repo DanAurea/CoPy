@@ -1,8 +1,11 @@
-from cregex import *
-from pathlib import Path
-from utils import debug_production
+import sys
+sys.path.append("../")
 
-import intermediate_representation as ir
+from pathlib import Path
+
+from core.utils import debug_production
+from front_end.lexer.cregex import *
+import core.intermediate_representation as ir
 import ply.lex as lex
 import ply.yacc as yacc
 import re
@@ -1182,7 +1185,7 @@ class C99PreProcessor(object):
 if __name__ == "__main__":
     pre_processor = C99PreProcessor(debug = False, keep_comment = False)
 
-    preprocessed_code = pre_processor.process("examples/digraph_trigraph/directive.h")
+    preprocessed_code = pre_processor.process("../examples/digraph_trigraph/directive.c")
 
-    with open("output/directive.i" , "wt") as preprocessed_file:
+    with open("../output/directive.i" , "wt") as preprocessed_file:
         preprocessed_file.write(preprocessed_code)

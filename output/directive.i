@@ -15,9 +15,14 @@
 
 
 
-static int elseVariable = 3; 
 
-typedef enum  
+
+
+
+
+
+static int elseVariable ; 
+typedef enum example 
 { 
 ENUM_1 = 2 , 
 ENUM_2 , 
@@ -25,34 +30,25 @@ ENUM_3 ,
 ENUM_4 , 
 ENUM_5 = 61 , 
 ENUM_6 
-} example_t, truc_t ; 
+} example_t ; 
 
-struct struct_tag;
 
-typedef struct{
-    int p;
-}anotherStruct_t;
+int main ( ) 
+{ 
+static uint8_t i = 10 L  ; 
+static uint8_t j = 2 + 3  ; 
+printf ( "i = %d\n" , i ) ; 
+printf ( "__DATE__ = %s\n" , "Jun 29 2022"  ) ; 
+printf ( "__FILE__ = %s\n" , "directive.c"  ) ; 
+printf ( "__TIME__ = %s\n" , "01:22:30"  ) ; 
+printf ( "__LINE__ = %s\n" , 11  ) ; 
 
-typedef struct struct_tag
-{
-    char t[5U][const static 2];
-    short t2[5U];
-    unsigned int a:5;
-    unsigned int :5;
-    float * pointer;
-    double ** const pointer2;
 
-    struct{
-        int p;
-    }nestedStruct_t;
+printf ( "__LINE__ = %s\n" , 45  ) ; 
 
-    struct{
-        int p;
-        struct
-        {
-            int c;
-        }nestednested_struct;
-    }anotherNestedStruct_t;
 
-    anotherStruct_t s;
-}struct_t;
+printf ( "__LINE__ = %s\n" , 48  ) ; 
+printf ( "__FILE__ = %s\n" , "not_directive.c"  ) ; 
+I am RECURSIVE ( )  
+I am RECURSIVE ( )  
+} 

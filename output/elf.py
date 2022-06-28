@@ -102,7 +102,7 @@ class AbiE(ctypes.LittleEndianStructure):
         return self.Value(self._value)
 class IdentificationT(ctypes.LittleEndianStructure):
 
-    _pack_   = 4
+    _pack_   = 8
     _fields_ = [
                     ('magicNumber', ctypes.c_uint8 * 4),
                     ('platform', X8664E),
@@ -115,7 +115,7 @@ class IdentificationT(ctypes.LittleEndianStructure):
                 ]
 class Elf32HdrT(ctypes.LittleEndianStructure):
 
-    _pack_   = 4
+    _pack_   = 1
     _fields_ = [
                     ('identification', IdentificationT),
                     ('type_u16', ctypes.c_int16),

@@ -6,6 +6,7 @@ import ctypes
 import textwrap
 
 from front_end.parser.parser_99 import C99Parser
+from front_end.parser.parser_gnu99 import GNU99Parser
 from transformer.generator import Generator
 from transformer.python_generator import PythonGenerator
 
@@ -211,7 +212,7 @@ class CTypesGenerator(Generator):
 
 if __name__ == '__main__':
     generator = CTypesGenerator(endianness = Endianness.LITTLE_ENDIAN) 
-    parser = C99Parser(debug = False)
+    parser = GNU99Parser(debug = False)
 
     with open("../examples/elf.i", "rt") as include_file:
         data = include_file.read()
