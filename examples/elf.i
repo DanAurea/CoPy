@@ -1,3 +1,8 @@
+#40 "elf.h" 1
+#41 "elf.h" 
+#42 "elf.h" 1 2
+#42 "elf.h" 2
+
 typedef enum
 {
     NONE = 0,
@@ -73,7 +78,7 @@ typedef struct
     char size;
 }__attribute__((aligned(8))) identification_t;
 
-typedef struct __attribute__((aligned(4))) __attribute__((packed)) elf32_hdr
+typedef struct __attribute__((aligned(4), packed)) __attribute__((packed)) elf32_hdr
 {
     identification_t identification;
     short type_u16;

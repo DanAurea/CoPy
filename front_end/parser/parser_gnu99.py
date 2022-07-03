@@ -3,10 +3,28 @@ import sys
 sys.path.append('../../')
 
 from core.utils import debug_production
+from enum import IntEnum
 from front_end.lexer.lexer_gnu99 import GNU99Lexer 
 from front_end.parser.parser_99 import C99Parser 
 
 import core.intermediate_representation as ir
+
+class PreProcessorFlags(IntEnum):
+    START_FILE     = 1
+    RETURN_TO_FILE = 2
+    SYSTEM_HEADER  = 3
+    EXTERN_C       = 4
+
+class LineMarker(object):
+
+    def __init__(self, linenum, filename, flag_list = []):
+        self.linenum   = linenum
+        self.filename  = filename
+        self.flag_list = flag_list
+
+    def __repr__(self):
+        s = f'''Line: {self.linenum} Filename: {self.filename} Flags: {[PreProcessorFlags(flag) for flag in  self.flag_list]}'''
+        return s
 
 class Attribute(object):
 
@@ -42,6 +60,34 @@ class GNU99Parser(C99Parser):
                 ir_object.packing = 1
             elif attribute.name == "aligned":
                 ir_object.packing = attribute.arg_list[0]
+
+    def p_external_declaration_linemarker(self, p):
+        '''external_declaration : linemarker
+        '''
+        p[0] = p[1]
+
+    @debug_production
+    def p_linemarker(self, p):
+        '''linemarker : '#' CONSTANT STRING_LITERAL flag_list
+        '''
+        linenum   = p[2]
+        filename  = p[3]
+        flag_list = p[4]
+        
+        # TODO: Update parser state using the linemarker content
+        p[0] = LineMarker(linenum, filename, flag_list)
+
+    def p_flag_list(self, p):
+        '''flag_list : 
+                     | CONSTANT
+                     | flag_list CONSTANT
+        '''
+        p[0] = []
+        if len(p) == 2:
+            p[0].append(p[1])
+        elif len(p) == 3:
+            p[0] = p[1]
+            p[0].append(p[2])
 
     @debug_production
     def p_enum_specifier_former_attribute(self, p):
