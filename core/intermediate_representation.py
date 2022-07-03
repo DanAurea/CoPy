@@ -1,8 +1,9 @@
 class SourceFile(object):
 
-    def __init__(self):
+    def __init__(self, filename = ''):
         self.translation_unit_list = []
-
+        self.filename = filename
+        
     def append(self, translation_unit):
         self.translation_unit_list.append(translation_unit)
 

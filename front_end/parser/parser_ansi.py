@@ -1,6 +1,9 @@
-from lexer_ansi import CANSILexer
+import sys
+sys.path.append("../../")
 
-import intermediate_representation as ir
+from front_end.lexer.lexer_ansi import CANSILexer
+
+import core.intermediate_representation as ir
 import ply.yacc as yacc
 
 class CANSIParser(object):
