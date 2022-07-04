@@ -3,17 +3,11 @@ import sys
 sys.path.append('../../')
 
 from core.utils import debug_production
-from enum import IntEnum
 from front_end.lexer.lexer_gnu99 import GNU99Lexer 
 from front_end.parser.parser_99 import C99Parser 
+from preprocessor.gnu99_preprocessor import PreProcessorFlags 
 
 import core.intermediate_representation as ir
-
-class PreProcessorFlags(IntEnum):
-    START_FILE     = 1
-    RETURN_TO_FILE = 2
-    SYSTEM_HEADER  = 3
-    EXTERN_C       = 4
 
 class LineMarker(object):
 
